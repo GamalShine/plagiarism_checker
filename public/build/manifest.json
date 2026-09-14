@@ -1,0 +1,23 @@
+{
+  "resources/css/app.css": {
+    "file": "assets/app-CKTOGa1B.css",
+    "name": "app",
+    "names": [
+      "app.css"
+    ],
+    "src": "resources/css/app.css",
+    "isEntry": true
+  },
+  "resources/js/app.js": {
+    "file": "assets/app-Cv8Tcx4t.js",
+    "name": "app",
+    "src": "resources/js/app.js",
+    "isEntry": true
+  },
+  "resources/js/payment.js": {
+    "file": "assets/payment-CbV3_VQE.js",
+    "name": "payment",
+    "src": "resources/js/payment.js",
+    "isEntry": true
+  }
+}
