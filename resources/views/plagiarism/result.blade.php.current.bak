@@ -1,0 +1,213 @@
+﻿@extends($layout ?? 'layouts.user')
+
+@section('title', 'Hasil Pengecekan Plagiasi')
+@section('page-title', 'Hasil Pengecekan')
+@section('page-subtitle', $check->document->title)
+
+@section('header-actions')
+<a href="{{ route($routePrefix.'.plagiarism.export', $check->id) }}" class="pc-btn-secondary pc-btn-sm">
+    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+    </svg>
+    Export PDF
+</a>
+@if($check->total_similarity > 0)
+<form action="{{ route('user.improvement.analyze') }}" method="POST" class="inline">
+    @csrf
+    <input type="hidden" name="plagiarism_check_id" value="{{ $check->id }}">
+    <input type="hidden" name="mode" value="manual">
+    <button type="submit" class="pc-btn-primary pc-btn-sm">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+        </svg>
+        Perbaiki
+    </button>
+</form>
+@endif
+@endsection
+
+@section('page-class', '')
+
+@section('content')
+@php
+$score = $check->total_similarity;
+$mainColor = '#2563eb';
+if ($score > 0 && $score <= 24) $mainColor='#16a34a' ;
+    elseif ($score> 24 && $score <= 49) $mainColor='#ca8a04' ;
+        elseif ($score> 49 && $score <= 74) $mainColor='#ea580c' ;
+            elseif ($score> 74) $mainColor = '#dc2626';
+            @endphp
+
+            @php
+            $sourceIndexMap = $sourceIndexMap ?? [];
+            if (empty($sourceIndexMap)) {
+            $idx = 1;
+            foreach ($check->sources as $s) {
+            $sourceIndexMap[$s->id] = $idx++;
+            }
+            }
+
+            $highlightsList = [];
+            foreach ($check->highlights as $h) {
+            $raw = trim($h->original_text);
+            if (mb_strlen($raw) < 5) continue;
+
+                $lines=preg_split('/\r\n|\r|\n/', $raw);
+                foreach ($lines as $line) {
+                $trimmed=trim($line);
+                if (mb_strlen($trimmed)>= 5) {
+                $highlightsList[] = [
+                'original_text' => $trimmed,
+                'color' => $h->source->color_code ?? '#ff0000',
+                'index' => $sourceIndexMap[$h->plagiarism_source_id] ?? '*',
+                'source_label' => $h->source->source_label ?? '',
+                'match_percentage' => $h->match_percentage
+                ];
+                }
+                }
+                }
+                $highlightsJson = array_values($highlightsList);
+                @endphp
+
+                <div class="turnitin-layout">
+                    <div class="turnitin-doc pc-scrollbar" id="document-viewer">
+                        <div id="viewer-toolbar" class="flex items-center justify-between gap-2 px-2 py-2 mb-3 sticky top-0 z-10 bg-white/80 dark:bg-slate-900/80 backdrop-blur rounded-lg border border-slate-200 dark:border-slate-700" style="display:none;">
+                            <div class="flex items-center gap-1">
+                                <button type="button" id="pdf-prev" class="px-2 py-1 text-xs font-semibold rounded-md border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800">â€¹ Prev</button>
+                                <span class="text-xs text-slate-600 dark:text-slate-300 px-2">
+                                    Hal. <span id="pdf-page-current">1</span> / <span id="pdf-page-total">1</span>
+                                </span>
+                                <button type="button" id="pdf-next" class="px-2 py-1 text-xs font-semibold rounded-md border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800">Next â€º</button>
+                            </div>
+                            <div class="flex items-center gap-1">
+                                <button type="button" id="pdf-zoom-out" class="px-2 py-1 text-xs font-semibold rounded-md border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800">âˆ’</button>
+                                <span class="text-xs text-slate-600 dark:text-slate-300 px-2" id="pdf-zoom-label">100%</span>
+                                <button type="button" id="pdf-zoom-in" class="px-2 py-1 text-xs font-semibold rounded-md border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800">+</button>
+                            </div>
+                        </div>
+
+                        <div id="docx-loading" class="flex flex-col items-center justify-center py-16 text-slate-500 gap-3">
+                            <svg class="animate-spin w-8 h-8 text-blue-600" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                            </svg>
+                            <span class="text-sm font-semibold">Memuat dokumen asli (rendering 1:1 dengan file asli)...</span>
+                        </div>
+
+                        <div id="pdf-container" class="flex flex-col items-center gap-4" style="display: none;"></div>
+
+                        <div id="docx-content" style="display: none;"></div>
+
+                        <div id="fallback-content" style="display: none;">
+                            {!! $highlightedText !!}
+                        </div>
+                    </div>
+
+                    <div class="turnitin-sidebar">
+                        <div class="t-score-header">
+                            <div class="grid grid-cols-2 gap-3">
+                                <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 text-center">
+                                    <p class="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">Plagiarized Sentences</p>
+                                    <div class="text-2xl sm:text-3xl font-extrabold text-red-600 dark:text-red-400">
+                                        {{ $check->plagiarism_percentage }}<span class="text-base">%</span>
+                                    </div>
+                                    @if($check->total_sentences > 0)
+                                    <p class="text-[10px] text-slate-400 dark:text-slate-500 mt-1 font-medium">({{ $check->matched_sentences }}/{{ $check->total_sentences }} kalimat)</p>
+                                    @endif
+                                </div>
+                                <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 text-center">
+                                    <p class="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">Overall Similarity</p>
+                                    <div class="text-2xl sm:text-3xl font-extrabold" style="color: {{ $mainColor }};">
+                                        {{ $score }}<span class="text-base">%</span>
+                                    </div>
+                                    <p class="text-[10px] text-slate-400 dark:text-slate-500 mt-1 font-medium">
+                                        @if($score <= 24) Original
+                                            @elseif($score <=49) Sedang
+                                            @elseif($score <=74) Tinggi
+                                            @else Plagiat @endif
+                                            </p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <ul class="t-source-list pc-scrollbar">
+                            @if($check->sources->isEmpty())
+                            <li class="p-8 text-center text-sm" style="color: var(--pc-text-muted);">
+                                <div class="pc-empty-icon mx-auto mb-3 w-12 h-12">
+                                    <svg class="w-5 h-5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                </div>
+                                Tidak ditemukan kecocokan. Dokumen bersih.
+                            </li>
+                            @else
+                            @foreach($check->sources as $source)
+                            <li class="t-source-item" title="{{ $source->title }}">
+                                <div class="t-source-color-bar" style="background-color: {{ $source->color_code }};"></div>
+                                <div class="t-source-content">
+                                    <div class="t-source-percent" style="color: {{ $source->color_code }};"><span class="text-xs font-normal text-slate-500 dark:text-slate-400 mr-1.5">{{ $source->matched_words }} words &mdash;</span> {{ (int) round($source->similarity_score) }}%</div>
+                                    <div class="t-source-details">
+                                        <div class="t-source-title">
+                                            <span class="inline-block px-1.5 py-0.5 text-[10px] font-bold text-white rounded mr-1" style="background-color: {{ $source->color_code }};">{{ $source->turnitin_index }}</span>
+                                            {{ $source->title }}
+                                        </div>
+                                        <div class="t-source-url">
+                                            @if($source->url && $source->url !== '#')
+                                            <a href="{{ $source->url }}" target="_blank" rel="noopener" class="pc-link text-xs">{{ $source->source_label }}</a>
+                                            @else
+                                            {{ $source->source_label }}
+                                            @endif
+                                        </div>
+                                        @if($source->snippet)
+                                        <p class="text-[11px] mt-1 line-clamp-2" style="color: var(--pc-text-subtle);">{{ $source->snippet }}</p>
+                                        @endif
+                                    </div>
+                                </div>
+                            </li>
+                            @endforeach
+                            @endif
+                        </ul>
+                    </div>
+                </div>
+
+                <script src="https://cdnjs.cloudflare.com/ajax/libs/mark.js/8.11.1/mark.min.js"></script>
+                <script src="https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
+
+                <script>
+                    // Konfigurasi worker PDF.js 3.11
+                    if (window.pdfjsLib) {
+                        window.pdfjsLib.GlobalWorkerOptions.workerSrc =
+                            'https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+                    }
+                </script>
+
+                <script>
+                    document.addEventListener('DOMContentLoaded', async function() {
+                        const fileUrl = "{{ Storage::url($check->document->file_path) }}";
+                        const pdfRoute = "{{ route($routePrefix.'.plagiarism.document', $check->id) }}";
+                        const rawFilename = @json($check->document->original_filename ?? $check->document->file_path);
+                        const fileExt = rawFilename.split('.').pop().toLowerCase();
+                        const highlights = @json($highlightsJson);
+
+                        const loadingEl = document.getElementById('docx-loading');
+                        const contentEl = document.getElementById('docx-content');
+                        const fallbackEl = document.getElementById('fallback-content');
+                        const pdfContainer = document.getElementById('pdf-container');
+                        const toolbar = document.getElementById('viewer-toolbar');
+
+                        if (fileExt === 'txt') {
+                            loadingEl.style.display = 'none';
+                            fallbackEl.style.display = 'block';
+                            return;
+                        }
+                </script>
+
+                <style>
+                    .pdf-page-wrapper { position: relative; margin: 0 auto 1.5rem auto; box-shadow: 0 8px 24px -8px rgba(0,0,0,0.2); background: white; }
+                    .pdf-page-canvas { display: block; }
+                    .pdf-text-layer { position: absolute; top: 0; left: 0; right: 0; bottom: 0; overflow: hidden; opacity: 1; line-height: 1; user-select: text; -webkit-user-select: text; }
+                    .pdf-text-layer > span, .pdf-text-layer > br { color: transparent; position: absolute; white-space: pre; cursor: text; transform-origin: 0% 0%; }
+                    .pdf-text-layer mark.t-highlight { background: transparent !important; color: transparent !important; }
+                    mark.t-highlight { padding: 1px 2px; border-radius: 3px; }
+                </style>
+
