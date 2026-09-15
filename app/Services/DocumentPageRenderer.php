@@ -90,8 +90,8 @@ class DocumentPageRenderer
             (string) (filesize($filePath) ?: 0),
             (string) $dpi,
             (string) $jpegQuality,
-            'pure-php-v1',
-            'word-v2',
+            'native-v2',
+            'word-v1',
         ]));
 
         return Storage::disk('local')->path("document-previews/{$documentId}/{$hash}");
@@ -112,10 +112,10 @@ class DocumentPageRenderer
     private function convertDocxToPdf(string $filePath, string $cacheDir): ?string
     {
         foreach ([
-            fn () => $this->convertDocxWithPhpWord($filePath, $cacheDir),
             fn () => $this->convertDocxWithMicrosoftWord($filePath, $cacheDir),
             fn () => $this->convertDocxWithLibreOffice($filePath, $cacheDir),
             fn () => $this->convertDocxWithBrowser($filePath, $cacheDir),
+            fn () => $this->convertDocxWithPhpWord($filePath, $cacheDir),
         ] as $convert) {
             $pdf = $convert();
             if ($pdf) {

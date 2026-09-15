@@ -228,6 +228,27 @@
         margin-top: 10px;
     }
 
+    .highlight-list {
+        margin-top: 18px;
+    }
+
+    .highlight-item {
+        margin-bottom: 8px;
+        padding: 7px 9px;
+        border-left: 4px solid #f59e0b;
+        background-color: #fff3a3;
+        color: #1f2937;
+        font-size: 10px;
+        line-height: 1.45;
+    }
+
+    .highlight-source {
+        font-size: 9px;
+        font-weight: 700;
+        color: #6b7280;
+        margin-bottom: 2px;
+    }
+
     .footer {
         margin-top: 44px;
         padding-top: 16px;
@@ -329,6 +350,27 @@
                 @endforeach
             </tbody>
         </table>
+        @endif
+
+        @php
+        $reportHighlights = $check->highlights
+            ->filter(fn($highlight) => trim((string) $highlight->original_text) !== '')
+            ->take(100);
+        @endphp
+        @if($reportHighlights->isNotEmpty())
+        <div class="highlight-list">
+            <div class="primary-label">Teks Terdeteksi</div>
+            @foreach($reportHighlights as $highlight)
+            @php
+            $highlightSource = $highlight->source?->source_label ?? 'Sumber';
+            $highlightColor = $highlight->color_code ?? $highlight->source?->color_code ?? '#f59e0b';
+            @endphp
+            <div class="highlight-item" style="border-left-color: {{ $highlightColor }};">
+                <div class="highlight-source">{{ $highlightSource }} - {{ $highlight->match_percentage }}% match</div>
+                {{ trim($highlight->original_text) }}
+            </div>
+            @endforeach
+        </div>
         @endif
 
         <div class="footer"
