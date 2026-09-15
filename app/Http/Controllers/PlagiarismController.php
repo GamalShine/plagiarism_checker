@@ -175,7 +175,9 @@ class PlagiarismController extends Controller
             $index++;
         }
 
-        $highlightedText = $this->buildHighlightedText($check, $sourceIndexMap);
+        $highlightedText = function_exists('shell_exec')
+            ? $this->buildHighlightedText($check, $sourceIndexMap)
+            : '';
 
         return view('plagiarism.result', array_merge(
             compact('check', 'highlightedText', 'sourceIndexMap'),

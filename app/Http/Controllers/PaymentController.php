@@ -321,7 +321,9 @@ class PaymentController extends Controller
             $sourceIndexMap[$source->id] = $index + 1;
         }
 
-        $highlightedText = app(PlagiarismController::class)->buildHighlightedText($check, $sourceIndexMap);
+        $highlightedText = function_exists('shell_exec')
+            ? app(PlagiarismController::class)->buildHighlightedText($check, $sourceIndexMap)
+            : '';
 
         return view('guest.result', [
             'link' => null,

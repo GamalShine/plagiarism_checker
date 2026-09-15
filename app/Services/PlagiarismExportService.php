@@ -25,7 +25,7 @@ class PlagiarismExportService
         @set_time_limit(0);
 
         if (! function_exists('shell_exec')) {
-            return $this->renderReportPdf(
+            return $this->renderSummaryPdf(
                 $check,
                 $highlightedText,
                 $downloadName,
@@ -136,6 +136,26 @@ class PlagiarismExportService
             ->setOptions([
                 'isHtml5ParserEnabled' => true,
                 'isRemoteEnabled' => true,
+                'chroot' => base_path(),
+            ])
+            ->download($downloadName);
+    }
+
+    private function renderSummaryPdf(
+        PlagiarismCheck $check,
+        string $highlightedText,
+        string $downloadName,
+        bool $includeAllSources = false,
+    ): Response {
+        return Pdf::loadView('plagiarism.export_report', [
+            'check' => $check,
+            'highlightedText' => $highlightedText,
+            'includeAllSources' => $includeAllSources,
+        ])
+            ->setPaper('a4', 'portrait')
+            ->setOptions([
+                'isHtml5ParserEnabled' => true,
+                'isRemoteEnabled' => false,
                 'chroot' => base_path(),
             ])
             ->download($downloadName);
