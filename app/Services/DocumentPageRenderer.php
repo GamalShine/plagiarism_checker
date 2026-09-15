@@ -5,7 +5,6 @@ namespace App\Services;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
-use Barryvdh\DomPDF\Facade\Pdf;
 use PhpOffice\PhpWord\IOFactory;
 use PhpOffice\PhpWord\Settings;
 
@@ -210,36 +209,7 @@ class DocumentPageRenderer
 
             $phpWord = IOFactory::load($filePath);
             $outputPath = $cacheDir . DIRECTORY_SEPARATOR . 'converted.pdf';
-            try {
-                IOFactory::createWriter($phpWord, 'PDF')->save($outputPath);
-            } catch (\Throwable $e) {
-                Log::notice('DOCX direct PDF conversion failed; trying HTML conversion', [
-                    'file' => $filePath,
-                    'error' => $e->getMessage(),
-                ]);
-            }
-
-            if (is_file($outputPath) && filesize($outputPath) > 0) {
-                return $outputPath;
-            }
-
-            $htmlPath = $cacheDir . DIRECTORY_SEPARATOR . 'document.html';
-            IOFactory::createWriter($phpWord, 'HTML')->save($htmlPath);
-
-            if (! is_file($htmlPath) || filesize($htmlPath) <= 0) {
-                return null;
-            }
-
-            $html = file_get_contents($htmlPath);
-            $html = is_string($html) ? $html : '';
-            $pdf = Pdf::loadHTML($html)
-                ->setPaper('a4', 'portrait')
-                ->setOptions([
-                    'isHtml5ParserEnabled' => true,
-                    'isRemoteEnabled' => false,
-                    'chroot' => $cacheDir,
-                ]);
-            $pdf->save($outputPath);
+            IOFactory::createWriter($phpWord, 'PDF')->save($outputPath);
 
             return is_file($outputPath) && filesize($outputPath) > 0 ? $outputPath : null;
         } catch (\Throwable $e) {

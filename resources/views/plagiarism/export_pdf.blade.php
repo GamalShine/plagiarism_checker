@@ -454,6 +454,13 @@
     {{-- HALAMAN REPORT: TURNITIN STYLE ORIGINALITY REPORT --}}
     <div>
 
+        @if(empty($pageImages))
+            <div class="fallback-note">
+                Pratinjau halaman dokumen tidak tersedia. Pastikan Python dengan PyMuPDF terpasang
+                (<code>pip install pymupdf</code>) agar halaman Word/PDF ditampilkan sebagai gambar.
+            </div>
+        @endif
+
         {{-- Paling atas: Nama file kayak di foto Turnitin --}}
         <div class="file-header">{{ $check->document->original_filename }}</div>
         <div class="report-label">Originality Report</div>
