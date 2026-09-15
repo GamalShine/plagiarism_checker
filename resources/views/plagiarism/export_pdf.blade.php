@@ -121,9 +121,10 @@
         }
 
         .doc-page img {
-            width: 100%;
-            max-width: 100%;
+            width: 85%;
+            max-width: 85%;
             height: auto;
+            margin: 0 auto;
             border: 1px solid #d1d5db;
         }
 
