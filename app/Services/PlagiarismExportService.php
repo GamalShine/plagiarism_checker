@@ -145,14 +145,15 @@ class PlagiarismExportService
         string $downloadName,
         bool $includeAllSources = false,
     ): Response {
-        return Pdf::loadView('plagiarism.export_report', [
+        return Pdf::loadView('plagiarism.export_pdf', [
             'check' => $check,
             'highlightedText' => '',
+            'pageImages' => [],
             'includeAllSources' => $includeAllSources,
         ])
             ->setPaper('a4', 'portrait')
             ->setOptions([
-                'isHtml5ParserEnabled' => false,
+                'isHtml5ParserEnabled' => true,
                 'isRemoteEnabled' => false,
                 'chroot' => base_path(),
             ])
