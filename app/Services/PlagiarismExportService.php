@@ -27,7 +27,6 @@ class PlagiarismExportService
         if (! function_exists('shell_exec')) {
             return $this->renderSummaryPdf(
                 $check,
-                $highlightedText,
                 $downloadName,
                 $includeAllSources,
             );
@@ -143,18 +142,17 @@ class PlagiarismExportService
 
     private function renderSummaryPdf(
         PlagiarismCheck $check,
-        string $highlightedText,
         string $downloadName,
         bool $includeAllSources = false,
     ): Response {
         return Pdf::loadView('plagiarism.export_report', [
             'check' => $check,
-            'highlightedText' => $highlightedText,
+            'highlightedText' => '',
             'includeAllSources' => $includeAllSources,
         ])
             ->setPaper('a4', 'portrait')
             ->setOptions([
-                'isHtml5ParserEnabled' => true,
+                'isHtml5ParserEnabled' => false,
                 'isRemoteEnabled' => false,
                 'chroot' => base_path(),
             ])
