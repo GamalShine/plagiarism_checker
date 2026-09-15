@@ -24,6 +24,15 @@ class PlagiarismExportService
         @ini_set('memory_limit', '1024M');
         @set_time_limit(0);
 
+        if (! function_exists('shell_exec')) {
+            return $this->renderReportPdf(
+                $check,
+                $highlightedText,
+                $downloadName,
+                $includeAllSources,
+            );
+        }
+
         $tempDir = storage_path('app/temp/exports/' . $check->id . '_' . time());
         File::ensureDirectoryExists($tempDir);
 
@@ -101,6 +110,22 @@ class PlagiarismExportService
         }
         @unlink($highlightsManifest);
 
+        return $this->renderReportPdf(
+            $check,
+            $highlightedText,
+            $downloadName,
+            $includeAllSources,
+            $pageImages,
+        );
+    }
+
+    private function renderReportPdf(
+        PlagiarismCheck $check,
+        string $highlightedText,
+        string $downloadName,
+        bool $includeAllSources = false,
+        array $pageImages = [],
+    ): Response {
         return Pdf::loadView('plagiarism.export_pdf', [
             'check' => $check,
             'highlightedText' => $highlightedText,
