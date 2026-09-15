@@ -24,7 +24,7 @@ class PlagiarismExportService
         @ini_set('memory_limit', '1024M');
         @set_time_limit(0);
 
-        if (! function_exists('shell_exec')) {
+        if (filter_var(env('PDF_LIGHTWEIGHT', false), FILTER_VALIDATE_BOOL) || ! function_exists('shell_exec')) {
             return $this->renderSummaryPdf(
                 $check,
                 $downloadName,
