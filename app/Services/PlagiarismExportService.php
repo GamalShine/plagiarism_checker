@@ -7,6 +7,7 @@ use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use setasign\Fpdi\Fpdi;
 use Symfony\Component\HttpFoundation\Response;
 
 class PlagiarismExportService
@@ -25,8 +26,9 @@ class PlagiarismExportService
         @set_time_limit(0);
 
         if (! function_exists('shell_exec')) {
-            return $this->renderSummaryPdf(
+            return $this->renderSharedHostingPdf(
                 $check,
+                $highlightedText,
                 $downloadName,
                 $includeAllSources,
             );
@@ -157,6 +159,85 @@ class PlagiarismExportService
                 'chroot' => base_path(),
             ])
             ->download($downloadName);
+    }
+
+    private function renderSharedHostingPdf(
+        PlagiarismCheck $check,
+        string $highlightedText,
+        string $downloadName,
+        bool $includeAllSources = false,
+    ): Response {
+        $tempDir = storage_path('app/temp/exports/shared_' . $check->id . '_' . time());
+        File::ensureDirectoryExists($tempDir);
+
+        $coverPath = $tempDir . DIRECTORY_SEPARATOR . 'cover.pdf';
+        $reportPath = $tempDir . DIRECTORY_SEPARATOR . 'report.pdf';
+        $mergedPath = $tempDir . DIRECTORY_SEPARATOR . 'complete.pdf';
+        $filePath = $check->document->file_path
+            ? Storage::disk('public')->path($check->document->file_path)
+            : '';
+
+        try {
+            $sourcePdf = $this->documentPageRenderer->resolveSourcePdf($filePath, $check->document->id);
+            if (! $sourcePdf || ! is_file($sourcePdf)) {
+                return $this->renderSummaryPdf($check, $downloadName, $includeAllSources);
+            }
+
+            $this->renderPartialPdf('plagiarism.export_cover', compact('check'), $coverPath);
+            $this->renderPartialPdf('plagiarism.export_report', [
+                'check' => $check,
+                'highlightedText' => $highlightedText,
+                'includeAllSources' => $includeAllSources,
+            ], $reportPath);
+
+            if (! $this->mergePdfFiles($mergedPath, [$coverPath, $sourcePdf, $reportPath])) {
+                return $this->renderSummaryPdf($check, $downloadName, $includeAllSources);
+            }
+
+            return response()->download($mergedPath, $downloadName, [
+                'Content-Type' => 'application/pdf',
+            ])->deleteFileAfterSend(true);
+        } catch (\Throwable $e) {
+            Log::warning('Complete shared-hosting PDF export failed', [
+                'check_id' => $check->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return $this->renderSummaryPdf($check, $downloadName, $includeAllSources);
+        } finally {
+            @unlink($coverPath);
+            @unlink($reportPath);
+        }
+    }
+
+    private function mergePdfFiles(string $outputPath, array $pdfPaths): bool
+    {
+        $pdf = new Fpdi();
+        $importedPage = false;
+
+        foreach ($pdfPaths as $pdfPath) {
+            if (! is_string($pdfPath) || ! is_file($pdfPath) || filesize($pdfPath) <= 0) {
+                continue;
+            }
+
+            $pageCount = $pdf->setSourceFile($pdfPath);
+            for ($pageNumber = 1; $pageNumber <= $pageCount; $pageNumber++) {
+                $template = $pdf->importPage($pageNumber);
+                $size = $pdf->getTemplateSize($template);
+                $orientation = $size['width'] > $size['height'] ? 'L' : 'P';
+                $pdf->AddPage($orientation, [$size['width'], $size['height']]);
+                $pdf->useTemplate($template, 0, 0, $size['width'], $size['height']);
+                $importedPage = true;
+            }
+        }
+
+        if (! $importedPage) {
+            return false;
+        }
+
+        $pdf->Output('F', $outputPath);
+
+        return is_file($outputPath) && filesize($outputPath) > 0;
     }
 
     private function renderPartialPdf(string $view, array $data, string $outputPath): void
