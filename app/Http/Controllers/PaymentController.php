@@ -334,7 +334,7 @@ class PaymentController extends Controller
     {
         $payment = Payment::where('guest_token', $token)->firstOrFail();
         $check = $payment->plagiarismCheck()
-            ->with(['document', 'sources' => fn ($q) => $q->orderBy('similarity_score', 'desc'), 'highlights.source'])
+            ->with(['document', 'user', 'sources' => fn ($q) => $q->orderBy('similarity_score', 'desc'), 'highlights.source'])
             ->firstOrFail();
 
         abort_unless($check->status === 'completed', 404);
@@ -351,7 +351,6 @@ class PaymentController extends Controller
             $check,
             $highlightedText,
             'plagiarism_report_guest_' . $check->id . '.pdf',
-            true,
         );
     }
 

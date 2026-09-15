@@ -83,7 +83,9 @@ class PlagiarismExportService
             }
             @unlink($highlightsManifest);
 
-            return response()->download($mergedPath, $downloadName)->deleteFileAfterSend(true);
+            return response()->download($mergedPath, $downloadName, [
+                'Content-Type' => 'application/pdf',
+            ])->deleteFileAfterSend(true);
         }
 
         Log::warning('PDF merge unavailable, falling back to single PDF export', [

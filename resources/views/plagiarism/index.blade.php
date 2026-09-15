@@ -314,7 +314,7 @@
                 </div>
             </div>
             <div class="mt-auto flex justify-end pt-5">
-                <a :href="guestResult.export_url" class="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-indigo-700" download>
+                <a href="#" @click.prevent="downloadGuestPdf" class="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-indigo-700">
                     <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
                     Download PDF
                 </a>
@@ -415,6 +415,7 @@ function plagiarismChecker() {
         isProcessingPayment: false,
         paymentOrderId: @js(request('payment')),
         guestToken: @js($guestToken ?? null),
+        guestPaymentBase: @js(rtrim(request()->getBaseUrl(), '/')),
         guestResultReady: false,
         guestResult: { similarity: 0, total_sentences: 0, matched_sentences: 0, sources: [], highlights: [], highlights_count: 0, hidden_sources_count: 0, export_url: '' },
         paymentStatusText: 'Menunggu konfirmasi pembayaran...',
@@ -486,6 +487,15 @@ function plagiarismChecker() {
             return Math.max(0, Math.min(100, 100 - Number(this.guestResult.similarity || 0)));
         },
 
+        downloadGuestPdf() {
+            if (!this.guestResult.export_url) {
+                this.paymentStatusText = 'Link download belum tersedia. Muat ulang halaman hasil lalu coba lagi.';
+                return;
+            }
+
+            window.location.assign(this.guestResult.export_url);
+        },
+
         startPaymentPolling() {
             this.pollPaymentStatus();
             this.paymentPollInterval = setInterval(() => this.pollPaymentStatus(), 3000);
@@ -498,7 +508,7 @@ function plagiarismChecker() {
 
         async pollGuestStatus() {
             try {
-                const response = await fetch(`{{ url('/guest-payment') }}/${this.guestToken}/status`, { headers: { Accept: 'application/json' } });
+                const response = await fetch(`${this.guestPaymentBase}/guest-payment/${encodeURIComponent(this.guestToken)}/status`, { headers: { Accept: 'application/json' } });
                 if (!response.ok) return;
                 const data = await response.json();
                 if (data.status === 'failed' || data.plagiarism_status === 'failed') {
