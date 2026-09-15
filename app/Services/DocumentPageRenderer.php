@@ -128,7 +128,7 @@ class DocumentPageRenderer
 
     private function convertDocxWithMicrosoftWord(string $filePath, string $cacheDir): ?string
     {
-        if (PHP_OS_FAMILY !== 'Windows') {
+        if (PHP_OS_FAMILY !== 'Windows' || ! function_exists('shell_exec')) {
             return null;
         }
 
@@ -165,6 +165,10 @@ class DocumentPageRenderer
 
     private function convertDocxWithLibreOffice(string $filePath, string $cacheDir): ?string
     {
+        if (! function_exists('shell_exec')) {
+            return null;
+        }
+
         $binary = $this->findLibreOfficeBinary();
         if (!$binary) {
             return null;
@@ -220,6 +224,10 @@ class DocumentPageRenderer
 
     private function convertDocxWithBrowser(string $filePath, string $cacheDir): ?string
     {
+        if (! function_exists('shell_exec')) {
+            return null;
+        }
+
         $browser = $this->findBrowserBinary();
         if (!$browser) {
             return null;
@@ -268,6 +276,10 @@ class DocumentPageRenderer
 
     private function convertPdfWithPython(string $pdfPath, string $cacheDir): array
     {
+        if (! function_exists('shell_exec')) {
+            return [];
+        }
+
         $python = $this->findPythonBinary();
         $script = base_path('scripts/pdf_to_images.py');
 
@@ -332,6 +344,10 @@ class DocumentPageRenderer
 
     private function convertPdfWithPdftoppm(string $pdfPath, string $cacheDir): array
     {
+        if (! function_exists('shell_exec')) {
+            return [];
+        }
+
         $binary = $this->findPdftoppmBinary();
         if (!$binary) {
             return [];

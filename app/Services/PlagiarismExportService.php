@@ -154,6 +154,10 @@ class PlagiarismExportService
         ?string $highlightsManifest = null,
         ?string $submissionId = null
     ): bool {
+        if (! function_exists('shell_exec')) {
+            return false;
+        }
+
         $python = $this->findPythonBinary();
         $script = base_path('scripts/merge_pdfs.py');
 
