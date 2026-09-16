@@ -128,7 +128,7 @@ class PlagiarismExportService
         @unlink($reportPath);
         @unlink($highlightsManifest);
 
-        return $this->renderCoverAndReportPdf($check, $downloadName, $includeAllSources);
+        return $this->renderCoverAndReportPdf($check, $highlightedText, $downloadName, $includeAllSources);
     }
 
     private function renderReportPdf(
@@ -215,7 +215,12 @@ class PlagiarismExportService
         $sourcePdf = $this->documentPageRenderer->resolveSourcePdfWithPhpWord($filePath, $check->document->id);
 
         if (! $sourcePdf) {
-            return $this->renderCoverAndReportPdf($check, $downloadName, $includeAllSources);
+            return $this->renderCoverAndReportPdf(
+                $check,
+                $this->buildLightweightHighlightedText($check),
+                $downloadName,
+                $includeAllSources,
+            );
         }
 
         $fallbackSourceIndexes = $check->sources->values()->mapWithKeys(
@@ -281,35 +286,47 @@ class PlagiarismExportService
             @unlink($reportPath);
         }
 
-        return $this->renderCoverAndReportPdf($check, $downloadName, $includeAllSources);
+        return $this->renderCoverAndReportPdf(
+            $check,
+            $this->buildLightweightHighlightedText($check),
+            $downloadName,
+            $includeAllSources,
+        );
     }
 
     private function renderCoverAndReportPdf(
         PlagiarismCheck $check,
+        string $highlightedText,
         string $downloadName,
         bool $includeAllSources = false,
     ): Response {
         $tempDir = storage_path('app/temp/exports/report-only_' . $check->id . '_' . time());
         File::ensureDirectoryExists($tempDir);
         $coverPath = $tempDir . DIRECTORY_SEPARATOR . 'cover.pdf';
+        $documentPath = $tempDir . DIRECTORY_SEPARATOR . 'document.pdf';
         $reportPath = $tempDir . DIRECTORY_SEPARATOR . 'report.pdf';
         $mergedPath = $tempDir . DIRECTORY_SEPARATOR . 'merged.pdf';
 
         try {
             $this->renderPartialPdf('plagiarism.export_cover', compact('check'), $coverPath);
+            $this->renderPartialPdf('plagiarism.export_document', [
+                'check' => $check,
+                'highlightedText' => $highlightedText,
+            ], $documentPath);
             $this->renderPartialPdf('plagiarism.export_report', [
                 'check' => $check,
                 'highlightedText' => '',
                 'includeAllSources' => $includeAllSources,
             ], $reportPath);
 
-            if ($this->mergePdfFiles($mergedPath, [$coverPath, $reportPath])) {
+            if ($this->mergePdfFiles($mergedPath, [$coverPath, $documentPath, $reportPath])) {
                 return response()->download($mergedPath, $downloadName, [
                     'Content-Type' => 'application/pdf',
                 ])->deleteFileAfterSend(true);
             }
         } finally {
             @unlink($coverPath);
+            @unlink($documentPath);
             @unlink($reportPath);
         }
 
@@ -562,7 +579,7 @@ class PlagiarismExportService
             $highlightedText,
             $includeAllSources ? 'all' : 'primary',
             (string) env('PDF_PAGE_MAX', 200),
-            'source-snippet-fallback-v1',
+            'highlighted-document-fallback-v2',
         ]));
         $directory = storage_path('app/temp/exports/cache');
         File::ensureDirectoryExists($directory);
