@@ -7,6 +7,7 @@ use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use Smalot\PdfParser\Parser;
 use setasign\Fpdi\Fpdi;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -122,6 +123,22 @@ class PlagiarismExportService
             ])->deleteFileAfterSend(! $exportCachePath);
         }
 
+        if ($sourcePdf && $this->mergePdfFilesWithPhpHighlights(
+            $mergedPath,
+            $coverPath,
+            $sourcePdf,
+            $reportPath,
+            $highlightsManifest,
+        )) {
+            @unlink($coverPath);
+            @unlink($reportPath);
+            @unlink($highlightsManifest);
+
+            return response()->download($mergedPath, $downloadName, [
+                'Content-Type' => 'application/pdf',
+            ])->deleteFileAfterSend(true);
+        }
+
         Log::warning('PDF merge unavailable, falling back to single PDF export', [
             'check_id' => $check->id,
             'source_pdf' => $sourcePdf,
@@ -232,6 +249,33 @@ class PlagiarismExportService
             return $this->renderSummaryPdf($check, $downloadName, $includeAllSources);
         }
 
+        $fallbackSourceIndexes = $check->sources->values()->mapWithKeys(
+            fn ($source, $index) => [$source->id => $index + 1]
+        );
+        $fallbackHighlights = $check->highlights->map(fn ($highlight) => [
+            'text' => $highlight->original_text,
+            'color' => $highlight->color_code ?? $highlight->source?->color_code ?? '#facc15',
+            'source_index' => $fallbackSourceIndexes[$highlight->plagiarism_source_id] ?? 0,
+        ])->values()->all();
+
+        foreach ($check->sources as $index => $source) {
+            if ($check->highlights->contains('plagiarism_source_id', $source->id)) {
+                continue;
+            }
+
+            foreach ([(string) $source->snippet, (string) $source->title] as $candidate) {
+                if (mb_strlen(trim($candidate)) < 10) {
+                    continue;
+                }
+                $fallbackHighlights[] = [
+                    'text' => mb_substr(trim($candidate), 0, 500),
+                    'color' => $source->color_code ?? '#facc15',
+                    'source_index' => $fallbackSourceIndexes[$source->id] ?? ($index + 1),
+                ];
+                break;
+            }
+        }
+
         $tempDir = storage_path('app/temp/exports/no-python_' . $check->id . '_' . time());
         File::ensureDirectoryExists($tempDir);
         $coverPath = $tempDir . DIRECTORY_SEPARATOR . 'cover.pdf';
@@ -246,7 +290,14 @@ class PlagiarismExportService
                 'includeAllSources' => $includeAllSources,
             ], $reportPath);
 
-            if ($this->mergePdfFiles($mergedPath, [$coverPath, $sourcePdf, $reportPath])) {
+            if ($this->mergePdfFilesWithPhpHighlights(
+                $mergedPath,
+                $coverPath,
+                $sourcePdf,
+                $reportPath,
+                null,
+                $fallbackHighlights,
+            )) {
                 return response()->download($mergedPath, $downloadName, [
                     'Content-Type' => 'application/pdf',
                 ])->deleteFileAfterSend(true);
@@ -292,6 +343,173 @@ class PlagiarismExportService
         $pdf->Output('F', $outputPath);
 
         return is_file($outputPath) && filesize($outputPath) > 0;
+    }
+
+    private function mergePdfFilesWithPhpHighlights(
+        string $outputPath,
+        string $coverPath,
+        string $sourcePath,
+        string $reportPath,
+        ?string $highlightsManifest = null,
+        array $inlineHighlights = [],
+    ): bool {
+        if (! is_file($sourcePath) || filesize($sourcePath) <= 0) {
+            return false;
+        }
+
+        try {
+            $manifestHighlights = $highlightsManifest && is_file($highlightsManifest)
+                ? json_decode((string) file_get_contents($highlightsManifest), true)
+                : [];
+            $highlights = is_array($manifestHighlights) && $manifestHighlights !== []
+                ? $manifestHighlights
+                : $inlineHighlights;
+
+            $parsedDocument = (new Parser())->parseFile($sourcePath);
+            $parsedPages = $parsedDocument->getPages();
+            $pdf = new Fpdi();
+
+            $this->appendPdfPages($pdf, $coverPath);
+
+            $sourcePageCount = $pdf->setSourceFile($sourcePath);
+            for ($pageNumber = 1; $pageNumber <= $sourcePageCount; $pageNumber++) {
+                $template = $pdf->importPage($pageNumber);
+                $size = $pdf->getTemplateSize($template);
+                $orientation = $size['width'] > $size['height'] ? 'L' : 'P';
+                $pdf->AddPage($orientation, [$size['width'], $size['height']]);
+                $pdf->useTemplate($template, 0, 0, $size['width'], $size['height']);
+
+                $parserPage = $parsedPages[$pageNumber - 1] ?? null;
+                if (! $parserPage || ! is_array($highlights)) {
+                    continue;
+                }
+
+                foreach ($highlights as $highlight) {
+                    $boxes = $this->findPhpHighlightBoxes(
+                        $parserPage,
+                        (string) ($highlight['text'] ?? ''),
+                        (float) $size['height'],
+                    );
+                    if ($boxes === []) {
+                        continue;
+                    }
+
+                    [$red, $green, $blue] = $this->parsePhpHighlightColor($highlight['color'] ?? '#facc15');
+                    $pdf->SetFillColor($red, $green, $blue);
+                    $pdf->SetDrawColor($red, $green, $blue);
+                    foreach ($boxes as $box) {
+                        $pdf->Rect($box['x'], $box['y'], $box['width'], $box['height'], 'F');
+                    }
+                }
+            }
+
+            $this->appendPdfPages($pdf, $reportPath);
+            $pdf->Output('F', $outputPath);
+
+            return is_file($outputPath) && filesize($outputPath) > 0;
+        } catch (\Throwable $e) {
+            Log::warning('PHP-only PDF export failed', [
+                'source' => $sourcePath,
+                'error' => $e->getMessage(),
+            ]);
+
+            return false;
+        }
+    }
+
+    private function appendPdfPages(Fpdi $pdf, string $path): void
+    {
+        if (! is_file($path) || filesize($path) <= 0) {
+            return;
+        }
+
+        $pageCount = $pdf->setSourceFile($path);
+        for ($pageNumber = 1; $pageNumber <= $pageCount; $pageNumber++) {
+            $template = $pdf->importPage($pageNumber);
+            $size = $pdf->getTemplateSize($template);
+            $orientation = $size['width'] > $size['height'] ? 'L' : 'P';
+            $pdf->AddPage($orientation, [$size['width'], $size['height']]);
+            $pdf->useTemplate($template, 0, 0, $size['width'], $size['height']);
+        }
+    }
+
+    private function findPhpHighlightBoxes(object $page, string $needle, float $pageHeight): array
+    {
+        $needle = $this->normalizePdfText($needle);
+        if (mb_strlen($needle) < 4) {
+            return [];
+        }
+
+        $items = [];
+        foreach ($page->getDataTm() as $entry) {
+            $matrix = $entry[0] ?? [];
+            $text = $this->normalizePdfText((string) ($entry[1] ?? ''));
+            if ($text === '' || ! isset($matrix[4], $matrix[5])) {
+                continue;
+            }
+
+            $fontSize = isset($entry[3]) && is_numeric($entry[3]) ? (float) $entry[3] : 10.0;
+            $items[] = [
+                'text' => $text,
+                'start' => 0,
+                'end' => 0,
+                'x' => (float) $matrix[4],
+                'y' => (float) $matrix[5],
+                'font_size' => max(5.0, $fontSize),
+            ];
+        }
+
+        $joined = '';
+        foreach ($items as &$item) {
+            $item['start'] = mb_strlen($joined);
+            $joined .= $item['text'];
+            $item['end'] = mb_strlen($joined);
+            $joined .= ' ';
+        }
+        unset($item);
+
+        $matchStart = mb_stripos($joined, $needle);
+        if ($matchStart === false) {
+            return [];
+        }
+
+        $matchEnd = $matchStart + mb_strlen($needle);
+        $boxes = [];
+        foreach ($items as $item) {
+            if ($item['end'] <= $matchStart || $item['start'] >= $matchEnd) {
+                continue;
+            }
+
+            $fontSize = $item['font_size'];
+            $width = max(4.0, mb_strlen($item['text']) * $fontSize * 0.5);
+            $boxes[] = [
+                'x' => max(0.0, $item['x'] - 1.0),
+                'y' => max(0.0, $pageHeight - $item['y'] - $fontSize * 1.15),
+                'width' => $width + 2.0,
+                'height' => $fontSize * 1.25,
+            ];
+        }
+
+        return $boxes;
+    }
+
+    private function normalizePdfText(string $text): string
+    {
+        return mb_strtolower(trim((string) preg_replace('/\s+/u', ' ', $text)));
+    }
+
+    /** @return array{0:int,1:int,2:int} */
+    private function parsePhpHighlightColor(string $value): array
+    {
+        if (preg_match('/^#?([0-9a-f]{6})$/i', trim($value), $match)) {
+            return [
+                hexdec(substr($match[1], 0, 2)),
+                hexdec(substr($match[1], 2, 2)),
+                hexdec(substr($match[1], 4, 2)),
+            ];
+        }
+
+        return [250, 204, 21];
     }
 
     private function renderPartialPdf(string $view, array $data, string $outputPath): void
