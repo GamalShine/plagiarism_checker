@@ -25,8 +25,8 @@ class PlagiarismExportService
         @ini_set('memory_limit', '1024M');
         @set_time_limit(0);
 
-        if (filter_var(env('PDF_LIGHTWEIGHT', false), FILTER_VALIDATE_BOOL) || ! function_exists('shell_exec')) {
-            return $this->renderNoPythonPdf($check, $downloadName, $includeAllSources);
+        if ($this->shouldUseLightweightPdfExport()) {
+            return $this->renderSummaryPdf($check, $downloadName, $includeAllSources);
         }
 
         $tempDir = storage_path('app/temp/exports/' . $check->id . '_' . time());
@@ -41,7 +41,16 @@ class PlagiarismExportService
         $filePath = $check->document->file_path
             ? Storage::disk('public')->path($check->document->file_path)
             : '';
-        $sourcePdf = $this->documentPageRenderer->resolveSourcePdf($filePath, $check->document->id);
+
+        $highlightedSourcePdf = $this->documentPageRenderer->resolveSourcePdfWithoutShell(
+            $filePath,
+            $check->document->id,
+            $check->highlights->all(),
+        );
+        $sourcePdf = $highlightedSourcePdf;
+        if (! $sourcePdf && $check->highlights->isEmpty()) {
+            $sourcePdf = $this->documentPageRenderer->resolveSourcePdf($filePath, $check->document->id);
+        }
         $pageImages = $sourcePdf ? [] : $this->documentPageRenderer->renderPages($filePath, $check->document->id);
 
         $this->ensureHangulFont();
@@ -115,6 +124,39 @@ class PlagiarismExportService
         );
     }
 
+    public function buildHighlightedSourcePdf(PlagiarismCheck $check): ?string
+    {
+        $check->loadMissing(['document', 'highlights.source']);
+
+        if (! $check->document || ! $check->document->file_path) {
+            return null;
+        }
+
+        $filePath = Storage::disk('public')->path($check->document->file_path);
+
+        if (! is_file($filePath)) {
+            return null;
+        }
+
+        $highlightedPdf = $this->documentPageRenderer->resolveSourcePdfWithoutShell(
+            $filePath,
+            $check->document->id,
+            $check->highlights->all(),
+        );
+
+        if ($highlightedPdf && is_file($highlightedPdf) && filesize($highlightedPdf) > 0) {
+            return $highlightedPdf;
+        }
+
+        if ($check->highlights->isNotEmpty()) {
+            return null;
+        }
+
+        $fallbackPdf = $this->documentPageRenderer->resolveSourcePdf($filePath, $check->document->id);
+
+        return $fallbackPdf && is_file($fallbackPdf) && filesize($fallbackPdf) > 0 ? $fallbackPdf : null;
+    }
+
     private function renderReportPdf(
         PlagiarismCheck $check,
         string $highlightedText,
@@ -186,11 +228,21 @@ class PlagiarismExportService
         return nl2br($text);
     }
 
+    public function shouldUseLightweightPdfExport(): bool
+    {
+        return filter_var(env('PDF_LIGHTWEIGHT', false), FILTER_VALIDATE_BOOL)
+            || ! function_exists('shell_exec');
+    }
+
     private function renderNoPythonPdf(
         PlagiarismCheck $check,
         string $downloadName,
         bool $includeAllSources = false,
     ): Response {
+        if ($this->shouldUseLightweightPdfExport()) {
+            return $this->renderSummaryPdf($check, $downloadName, $includeAllSources);
+        }
+
         $filePath = $check->document->file_path
             ? Storage::disk('public')->path($check->document->file_path)
             : '';
@@ -305,65 +357,63 @@ class PlagiarismExportService
         ?string $highlightsManifest = null,
         ?string $submissionId = null
     ): bool {
-        if (! function_exists('shell_exec')) {
+        $pdf = new Fpdi();
+        $importedPage = false;
+        $sourcePdfPaths = [];
+
+        if (is_file($coverPath) && filesize($coverPath) > 0) {
+            $sourcePdfPaths[] = $coverPath;
+        }
+
+        if (is_string($sourcePath) && $sourcePath !== '' && is_file($sourcePath) && filesize($sourcePath) > 0) {
+            $sourcePdfPaths[] = $sourcePath;
+        }
+
+        if (is_file($reportPath) && filesize($reportPath) > 0) {
+            $sourcePdfPaths[] = $reportPath;
+        }
+
+        if ($sourceImagesManifest && is_file($sourceImagesManifest)) {
+            $payload = json_decode((string) file_get_contents($sourceImagesManifest), true);
+            $imagePages = is_array($payload) ? ($payload['pages'] ?? $payload) : [];
+            foreach ($imagePages as $page) {
+                $path = is_array($page) ? ($page['path'] ?? null) : $page;
+                if (! is_string($path) || ! is_file($path)) {
+                    continue;
+                }
+
+                [$width, $height] = getimagesize($path) ?: [595, 842];
+                $pdf->AddPage('P', [$width, $height]);
+                $pdf->Image($path, 0, 0, $width, $height, '', '', '', false, 300, '', false, false, 0, 'D');
+                $importedPage = true;
+            }
+        }
+
+        if ($sourcePdfPaths === [] && ! $importedPage) {
             return false;
         }
 
-        $python = $this->findPythonBinary();
-        $script = base_path('scripts/merge_pdfs.py');
+        foreach ($sourcePdfPaths as $pdfPath) {
+            if (! is_string($pdfPath) || ! is_file($pdfPath) || filesize($pdfPath) <= 0) {
+                continue;
+            }
 
-        if (!$python || !is_file($script)) {
+            $pageCount = $pdf->setSourceFile($pdfPath);
+            for ($pageNumber = 1; $pageNumber <= $pageCount; $pageNumber++) {
+                $template = $pdf->importPage($pageNumber);
+                $size = $pdf->getTemplateSize($template);
+                $orientation = $size['width'] > $size['height'] ? 'L' : 'P';
+                $pdf->AddPage($orientation, [$size['width'], $size['height']]);
+                $pdf->useTemplate($template, 0, 0, $size['width'], $size['height']);
+                $importedPage = true;
+            }
+        }
+
+        if (! $importedPage) {
             return false;
         }
 
-        if (!$sourceImagesManifest && !$sourcePath) {
-            return false;
-        }
-
-        $maxPages = (int) env('PDF_PAGE_MAX', 200);
-        $jpegQuality = (int) env('PDF_PAGE_JPEG_QUALITY', 70);
-        $sourceDpi = (int) env('PDF_SOURCE_DPI', 96);
-        $submissionId = $submissionId ?? '';
-
-        $command = sprintf(
-            '%s %s %s --cover %s --report %s --max-pages %d --jpeg-quality %d --source-dpi %d --submission-id %s',
-            escapeshellarg($python),
-            escapeshellarg($script),
-            escapeshellarg($outputPath),
-            escapeshellarg($coverPath),
-            escapeshellarg($reportPath),
-            $maxPages,
-            $jpegQuality,
-            $sourceDpi,
-            escapeshellarg($submissionId)
-        );
-
-        if ($sourceImagesManifest) {
-            $command .= ' --source-images ' . escapeshellarg($sourceImagesManifest);
-        } elseif ($sourcePath) {
-            $command .= ' --source ' . escapeshellarg($sourcePath) . ' --source-as-images';
-        }
-
-        if ($highlightsManifest && is_file($highlightsManifest)) {
-            $command .= ' --highlights ' . escapeshellarg($highlightsManifest);
-        }
-
-        $command .= ' 2>&1';
-
-        $output = shell_exec($command);
-        if (!is_string($output) || trim($output) === '') {
-            return false;
-        }
-
-        $decoded = json_decode(trim($output), true);
-        if (!is_array($decoded) || !empty($decoded['error'])) {
-            Log::warning('PDF merge failed', [
-                'output' => $output,
-                'error' => $decoded['error'] ?? 'invalid response',
-            ]);
-
-            return false;
-        }
+        $pdf->Output('F', $outputPath);
 
         return is_file($outputPath) && filesize($outputPath) > 0;
     }

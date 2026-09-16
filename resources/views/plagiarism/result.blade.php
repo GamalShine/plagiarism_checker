@@ -822,6 +822,7 @@ if ($score > 0 && $score <= 24) $mainColor='#16a34a' ; elseif ($score> 24 && $sc
                 <script>
                 document.addEventListener('DOMContentLoaded', async function() {
                     const fileUrl = @json(($publicMode ?? false) ? asset('storage/' . $check->document->file_path) : route($routePrefix . '.plagiarism.document', $check->id));
+                    const docxUrl = @json(($publicMode ?? false) ? asset('storage/' . $check->document->file_path) : route($routePrefix . '.plagiarism.document_docx', $check->id));
                     const rawFilename = @json($check->document->original_filename ?? $check->document->file_path);
                     const fileExt = rawFilename.split('.').pop().toLowerCase();
                     const highlights = @json($highlightsList);
@@ -866,21 +867,68 @@ if ($score > 0 && $score <= 24) $mainColor='#16a34a' ; elseif ($score> 24 && $sc
                     syncContainerHeight();
                     window.addEventListener('resize', syncContainerHeight);
 
-                    // Tampilkan PDF hasil konversi dan stabilo dari server.
-                    try {
-                        const pdfFrame = document.createElement('iframe');
-                        pdfFrame.src = fileUrl;
-                        pdfFrame.title = 'Dokumen dengan stabilo';
-                        pdfFrame.className = 'w-full rounded-lg border border-slate-300 bg-white';
-                        pdfFrame.style.height = 'min(78vh, 980px)';
-                        pdfFrame.loading = 'lazy';
-                        pdfFrame.addEventListener('load', function() {
-                            if (docxLoading) docxLoading.style.display = 'none';
+                    async function renderOriginalDocx() {
+                        const response = await fetch(docxUrl, { credentials: 'same-origin' });
+                        if (!response.ok) throw new Error('Dokumen Word tidak dapat dimuat.');
+
+                        const buffer = await response.arrayBuffer();
+                        docxTarget.innerHTML = '';
+                        await docx.renderAsync(buffer, docxTarget, null, {
+                            className: 'docx',
+                            inWrapper: true,
+                            ignoreWidth: false,
+                            ignoreHeight: false,
+                            breakPages: true,
+                            renderHeaders: true,
+                            renderFooters: true,
+                            useBase64URL: true,
                         });
-                        docxTarget.appendChild(pdfFrame);
+
+                        const markRoot = new Mark(docxTarget);
+                        for (const highlight of highlights) {
+                            const phrase = String(highlight.original_text || '').replace(/[\r\n\t]+/g, ' ')
+                                .replace(/\s+/g, ' ').trim();
+                            if (phrase.length < 5) continue;
+
+                            await new Promise(resolve => markRoot.mark(phrase, {
+                                acrossElements: true,
+                                separateWordSearch: false,
+                                element: 'mark',
+                                each: element => {
+                                    const color = highlight.color || '#ffeb3b';
+                                    element.className = 't-highlight';
+                                    element.dataset.sourceId = highlight.source_id || '';
+                                    element.dataset.sourceIndex = highlight.index || '*';
+                                    element.dataset.sourceColor = color;
+                                    element.title = highlight.source_label || 'Sumber plagiarisme';
+                                    element.style.backgroundColor = color + '66';
+                                    element.style.borderBottom = '2px solid ' + color;
+                                },
+                                done: resolve,
+                            }));
+                        }
+
                         if (docxLoading) docxLoading.style.display = 'none';
+                    }
+
+                    // DOCX ditampilkan dari file upload asli, lalu kalimat terdeteksi diberi stabilo sesuai warna sumber.
+                    try {
+                        if (fileExt === 'docx' && typeof docx !== 'undefined' && typeof Mark !== 'undefined') {
+                            await renderOriginalDocx();
+                        } else {
+                            const pdfFrame = document.createElement('iframe');
+                            pdfFrame.src = fileUrl;
+                            pdfFrame.title = 'Dokumen dengan stabilo';
+                            pdfFrame.className = 'w-full rounded-lg border border-slate-300 bg-white';
+                            pdfFrame.style.height = 'min(78vh, 980px)';
+                            pdfFrame.loading = 'lazy';
+                            pdfFrame.addEventListener('load', function() {
+                                if (docxLoading) docxLoading.style.display = 'none';
+                            });
+                            docxTarget.appendChild(pdfFrame);
+                        }
                     } catch (err) {
-                        console.error('Gagal memuat PDF dokumen:', err);
+                        console.error('Gagal memuat dokumen asli:', err);
                         if (docxLoading) docxLoading.style.display = 'none';
                         if (tabPlain) tabPlain.click();
                     }

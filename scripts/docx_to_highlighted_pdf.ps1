@@ -13,6 +13,19 @@ $ErrorActionPreference = 'Stop'
 $word = $null
 $document = $null
 
+function Convert-HexToWordColor([string]$HexColor) {
+    $hex = ($HexColor -replace '#', '').Trim()
+    if ($hex.Length -ne 6 -or $hex -notmatch '^[0-9a-fA-F]{6}$') {
+        return 65535
+    }
+
+    $red = [Convert]::ToInt32($hex.Substring(0, 2), 16)
+    $green = [Convert]::ToInt32($hex.Substring(2, 2), 16)
+    $blue = [Convert]::ToInt32($hex.Substring(4, 2), 16)
+
+    return $red + ($green * 256) + ($blue * 65536)
+}
+
 try {
     if (-not (Test-Path -LiteralPath $InputPath)) {
         throw "Input file not found: $InputPath"
@@ -35,28 +48,49 @@ try {
             continue
         }
 
-        $needle = $needle.Trim()
-        if ($needle.Length -gt 250) {
-            $needle = $needle.Substring(0, 250)
+        $needle = (($needle -replace '[\r\n\t]+', ' ') -replace '\s+', ' ').Trim()
+        if ($needle.Length -eq 0) {
+            continue
         }
 
-        $search = $document.Content.Duplicate
-        $find = $search.Find
-        $find.ClearFormatting()
-        $find.Text = $needle
-        $find.Forward = $true
-        $find.Wrap = 0
-        $find.Format = $false
+        # Word Find.Text rejects long strings. Search in word-boundary chunks
+        # so long detected sentences still receive a continuous highlight.
+        $words = $needle -split ' '
+        $chunks = @()
+        $chunk = ''
+        foreach ($word in $words) {
+            $candidate = if ($chunk) { "$chunk $word" } else { $word }
+            if ($candidate.Length -gt 180 -and $chunk) {
+                $chunks += $chunk
+                $chunk = $word
+            } else {
+                $chunk = $candidate
+            }
+        }
+        if ($chunk) {
+            $chunks += $chunk
+        }
 
-        while ($find.Execute()) {
-            $search.HighlightColorIndex = 7
-            $search.Collapse(0)
+        foreach ($chunk in $chunks) {
+            $search = $document.Content.Duplicate
             $find = $search.Find
             $find.ClearFormatting()
-            $find.Text = $needle
+            $find.Text = $chunk
             $find.Forward = $true
             $find.Wrap = 0
             $find.Format = $false
+
+            while ($find.Execute()) {
+                $color = Convert-HexToWordColor ([string]$item.color)
+                $search.Shading.BackgroundPatternColor = $color
+                $search.Collapse(0)
+                $find = $search.Find
+                $find.ClearFormatting()
+                $find.Text = $chunk
+                $find.Forward = $true
+                $find.Wrap = 0
+                $find.Format = $false
+            }
         }
     }
 

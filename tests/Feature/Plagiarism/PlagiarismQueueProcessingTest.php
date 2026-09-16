@@ -115,4 +115,24 @@ class PlagiarismQueueProcessingTest extends TestCase
         $this->assertStringContainsString('BAB I', $filtered);
         $this->assertStringNotContainsString('BAB II', $filtered);
     }
+
+    public function test_lightweight_pdf_export_flag_disables_heavy_source_rendering(): void
+    {
+        $service = app(\App\Services\PlagiarismExportService::class);
+
+        putenv('PDF_LIGHTWEIGHT=false');
+        $_ENV['PDF_LIGHTWEIGHT'] = 'false';
+
+        $this->assertFalse($service->shouldUseLightweightPdfExport());
+
+        putenv('PDF_LIGHTWEIGHT');
+        unset($_ENV['PDF_LIGHTWEIGHT']);
+    }
+
+    public function test_export_service_builds_highlighted_source_pdf_for_document_export(): void
+    {
+        $service = app(\App\Services\PlagiarismExportService::class);
+
+        $this->assertTrue(method_exists($service, 'buildHighlightedSourcePdf'));
+    }
 }

@@ -74,7 +74,18 @@ class DocumentPageRenderer
         }
 
         $cacheDir = $this->cacheDirectory($documentId, $filePath);
-        $cachedPdf = $cacheDir . DIRECTORY_SEPARATOR . 'phpword-source.pdf';
+        $highlightedCacheKey = md5(json_encode(array_map(
+            fn ($highlight) => [
+                'text' => (string) ($highlight->original_text ?? ''),
+                'color' => (string) ($highlight->color_code ?? $highlight->source?->color_code ?? '#FFF3A3'),
+            ],
+            $highlights,
+        ),
+            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES,
+        ));
+        $cachedPdf = $highlights !== []
+            ? $cacheDir . DIRECTORY_SEPARATOR . 'highlighted-source-' . $highlightedCacheKey . '.pdf'
+            : $cacheDir . DIRECTORY_SEPARATOR . 'phpword-source.pdf';
 
         if (is_file($cachedPdf) && filesize($cachedPdf) > 0) {
             return $cachedPdf;
@@ -86,6 +97,15 @@ class DocumentPageRenderer
         if (function_exists('shell_exec')) {
             if (PHP_OS_FAMILY === 'Windows' && $highlights !== []) {
                 $pdfPath = $this->convertDocxWithWordHighlights($filePath, $cacheDir, $highlights);
+                if ($pdfPath) {
+                    if ($pdfPath !== $cachedPdf) {
+                        @copy($pdfPath, $cachedPdf);
+                    }
+
+                    return is_file($cachedPdf) ? $cachedPdf : $pdfPath;
+                }
+
+                return null;
             }
 
             foreach ([
@@ -118,8 +138,12 @@ class DocumentPageRenderer
 
         $outputPath = $cacheDir . DIRECTORY_SEPARATOR . 'highlighted-source.pdf';
         $highlightsPath = $cacheDir . DIRECTORY_SEPARATOR . 'highlights.json';
+        @unlink($outputPath);
         file_put_contents($highlightsPath, json_encode(array_map(
-            fn ($highlight) => ['text' => $highlight->original_text],
+            fn ($highlight) => [
+                'text' => $highlight->original_text,
+                'color' => $highlight->color_code ?? $highlight->source?->color_code ?? '#FFF3A3',
+            ],
             $highlights,
         ), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
 
@@ -138,6 +162,7 @@ class DocumentPageRenderer
 
         Log::warning('DOCX highlight conversion failed', [
             'file' => $filePath,
+            'highlight_count' => count($highlights),
             'output' => $output,
         ]);
 
@@ -177,7 +202,7 @@ class DocumentPageRenderer
             (string) $dpi,
             (string) $jpegQuality,
             'native-v2',
-            'word-v1',
+            'word-v2-colored-highlights',
         ]));
 
         return Storage::disk('local')->path("document-previews/{$documentId}/{$hash}");

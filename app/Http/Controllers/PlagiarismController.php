@@ -257,9 +257,14 @@ class PlagiarismController extends Controller
     {
         Gate::authorize('view', $plagiarismCheck);
 
+        $plagiarismCheck->load(['document', 'highlights.source']);
         $filePath = \Illuminate\Support\Facades\Storage::disk('public')->path($plagiarismCheck->document->file_path);
         $renderer = app(\App\Services\DocumentPageRenderer::class);
-        $pdfPath = $renderer->resolveSourcePdf($filePath, $plagiarismCheck->document->id);
+        $pdfPath = $renderer->resolveSourcePdfWithoutShell(
+            $filePath,
+            $plagiarismCheck->document->id,
+            $plagiarismCheck->highlights->all(),
+        );
 
         if (!$pdfPath || !file_exists($pdfPath)) {
             // Fallback to original if it's already a PDF

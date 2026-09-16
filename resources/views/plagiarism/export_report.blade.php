@@ -362,34 +362,6 @@
         </table>
         @endif
 
-        @php
-        $reportHighlights = $check->highlights
-            ->filter(fn($highlight) => trim((string) $highlight->original_text) !== '')
-            ->take(100);
-        @endphp
-        @if($reportHighlights->isNotEmpty())
-        <div class="highlight-list">
-            <div class="primary-label">Teks Terdeteksi</div>
-            @foreach($reportHighlights as $highlight)
-            @php
-            $highlightSource = $highlight->source?->source_label ?? 'Sumber';
-            $highlightColor = $highlight->color_code ?? $highlight->source?->color_code ?? '#f59e0b';
-            @endphp
-            <div class="highlight-item" style="border-left-color: {{ $highlightColor }}; background-color: #fff3a3;">
-                <div class="highlight-source">{{ $highlightSource }} - {{ $highlight->match_percentage }}% match</div>
-                {{ trim($highlight->original_text) }}
-            </div>
-            @endforeach
-        </div>
-        @endif
-
-        @if(!empty(trim($highlightedText ?? '')))
-        <div class="highlighted-document">
-            <div class="primary-label">Naskah dengan Stabilo</div>
-            {!! $highlightedText !!}
-        </div>
-        @endif
-
         <div class="footer"
             style="text-align: left; font-size: 11px; color: #6b7280; opacity: 0.5; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; line-height: 1.6; margin-top: 30px; border-top: 1px solid #e5e7eb; padding-top: 12px;">
             <table style="width: 100%; border-collapse: collapse; font-size: 11px; color: #6b7280;">
