@@ -26,7 +26,7 @@ class PlagiarismExportService
         @ini_set('memory_limit', '1024M');
         @set_time_limit(0);
 
-        if (filter_var(env('PDF_LIGHTWEIGHT', false), FILTER_VALIDATE_BOOL) || ! function_exists('shell_exec')) {
+        if (filter_var(env('PDF_LIGHTWEIGHT', false), FILTER_VALIDATE_BOOL)) {
             return $this->renderFallbackPdf($check, $downloadName, $includeAllSources);
         }
 
@@ -49,7 +49,7 @@ class PlagiarismExportService
             ]);
         }
 
-        $sourcePdf = $this->documentPageRenderer->resolveSourcePdf($filePath, $check->document->id);
+        $sourcePdf = $this->documentPageRenderer->resolveSourcePdfWithPhpWord($filePath, $check->document->id);
         $pageImages = [];
 
         $this->ensureHangulFont();
@@ -101,13 +101,12 @@ class PlagiarismExportService
             $reportPath
         );
 
-        if ($sourcePdf && $this->mergePdfs(
+        if ($sourcePdf && $this->mergePdfFilesWithPhpHighlights(
             $mergedPath,
             $coverPath,
-            $reportPath,
             $sourcePdf,
+            $reportPath,
             $highlightsManifest,
-            'trn:oid:::9817:193844' . str_pad((string) $check->document_id, 3, '0', STR_PAD_LEFT)
         )) {
             @unlink($coverPath);
             @unlink($reportPath);
@@ -121,22 +120,6 @@ class PlagiarismExportService
             return response()->download($exportCachePath ?: $mergedPath, $downloadName, [
                 'Content-Type' => 'application/pdf',
             ])->deleteFileAfterSend(! $exportCachePath);
-        }
-
-        if ($sourcePdf && $this->mergePdfFilesWithPhpHighlights(
-            $mergedPath,
-            $coverPath,
-            $sourcePdf,
-            $reportPath,
-            $highlightsManifest,
-        )) {
-            @unlink($coverPath);
-            @unlink($reportPath);
-            @unlink($highlightsManifest);
-
-            return response()->download($mergedPath, $downloadName, [
-                'Content-Type' => 'application/pdf',
-            ])->deleteFileAfterSend(true);
         }
 
         Log::warning('PDF merge unavailable, falling back to single PDF export', [
@@ -239,11 +222,7 @@ class PlagiarismExportService
             ? Storage::disk('public')->path($check->document->file_path)
             : '';
 
-        $sourcePdf = $this->documentPageRenderer->resolveSourcePdfWithoutShell(
-            $filePath,
-            $check->document->id,
-            $check->highlights->all(),
-        );
+        $sourcePdf = $this->documentPageRenderer->resolveSourcePdfWithPhpWord($filePath, $check->document->id);
 
         if (! $sourcePdf) {
             return $this->renderSummaryPdf($check, $downloadName, $includeAllSources);
@@ -539,83 +518,6 @@ class PlagiarismExportService
         if (is_file($systemFont)) {
             @copy($systemFont, $fontPath);
         }
-    }
-
-    private function mergePdfs(
-        string $outputPath,
-        string $coverPath,
-        string $reportPath,
-        ?string $sourcePath = null,
-        ?string $highlightsManifest = null,
-        ?string $submissionId = null
-    ): bool {
-        if (! function_exists('shell_exec') || ! $sourcePath) {
-            return false;
-        }
-
-        $node = $this->findNodeBinary();
-        $script = base_path('scripts/merge_pdfs.mjs');
-
-        if (!$node || !is_file($script)) {
-            return false;
-        }
-
-        $maxPages = (int) env('PDF_PAGE_MAX', 200);
-        $submissionId = $submissionId ?? '';
-
-        $command = sprintf(
-            '%s %s %s --cover %s --source %s --report %s --highlights %s --max-pages %d',
-            escapeshellarg($node),
-            escapeshellarg($script),
-            escapeshellarg($outputPath),
-            escapeshellarg($coverPath),
-            escapeshellarg($sourcePath),
-            escapeshellarg($reportPath),
-            escapeshellarg($highlightsManifest ?? ''),
-            $maxPages
-        );
-
-        $stderrPath = $outputPath . '.stderr';
-        $command .= ' 2> ' . escapeshellarg($stderrPath);
-
-        $output = shell_exec($command);
-        @unlink($stderrPath);
-        if (!is_string($output) || trim($output) === '') {
-            return false;
-        }
-
-        $decoded = json_decode(trim($output), true);
-        if (!is_array($decoded) || !empty($decoded['error'])) {
-            Log::warning('PDF merge failed', [
-                'output' => $output,
-                'error' => $decoded['error'] ?? 'invalid response',
-            ]);
-
-            return false;
-        }
-
-        return is_file($outputPath) && filesize($outputPath) > 0;
-    }
-
-    private function findNodeBinary(): ?string
-    {
-        $candidates = array_filter([
-            env('NODE_PATH'),
-            'C:\\Program Files\\nodejs\\node.exe',
-            'node',
-        ]);
-
-        foreach ($candidates as $candidate) {
-            if ($candidate === 'node') {
-                return $candidate;
-            }
-
-            if (is_string($candidate) && is_file($candidate)) {
-                return $candidate;
-            }
-        }
-
-        return null;
     }
 
     private function exportCachePath(

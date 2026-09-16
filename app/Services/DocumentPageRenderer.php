@@ -109,6 +109,38 @@ class DocumentPageRenderer
         return is_file($cachedPdf) && filesize($cachedPdf) > 0 ? $cachedPdf : null;
     }
 
+    public function resolveSourcePdfWithPhpWord(string $filePath, int $documentId): ?string
+    {
+        if (! is_file($filePath)) {
+            return null;
+        }
+
+        $extension = strtolower(pathinfo($filePath, PATHINFO_EXTENSION));
+        if ($extension === 'pdf') {
+            return $filePath;
+        }
+
+        if ($extension !== 'docx') {
+            return null;
+        }
+
+        $cacheDir = $this->cacheDirectory($documentId, $filePath);
+        $cachedPdf = $cacheDir . DIRECTORY_SEPARATOR . 'phpword-source.pdf';
+
+        if (is_file($cachedPdf) && filesize($cachedPdf) > 0) {
+            return $cachedPdf;
+        }
+
+        File::ensureDirectoryExists($cacheDir);
+        $pdfPath = $this->convertDocxWithPhpWord($filePath, $cacheDir);
+
+        if ($pdfPath && $pdfPath !== $cachedPdf && is_file($pdfPath)) {
+            @copy($pdfPath, $cachedPdf);
+        }
+
+        return is_file($cachedPdf) && filesize($cachedPdf) > 0 ? $cachedPdf : null;
+    }
+
     private function convertDocxWithWordHighlights(string $filePath, string $cacheDir, array $highlights): ?string
     {
         $script = base_path('scripts/docx_to_highlighted_pdf.ps1');
