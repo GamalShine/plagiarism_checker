@@ -355,33 +355,14 @@
             color: #9a3412;
         }
 
-        /* ===== HIGHLIGHTED TEXT ===== */
-        .highlight-section-label {
-            font-size: 13px;
-            font-weight: 700;
-            color: #111827;
-            margin: 32px 0 6px;
-            padding-bottom: 6px;
-            border-bottom: 2px solid #4a4a8a;
-        }
-
-        .highlight-section-desc {
-            font-size: 11px;
-            color: #666;
-            margin-bottom: 16px;
-        }
-
-        .content {
-            font-family: 'Times New Roman', Times, serif;
-            font-size: 13px;
-            text-align: justify;
-            white-space: pre-wrap;
-            line-height: 1.8;
-        }
-
+        span.t-highlight,
         mark.t-highlight {
             color: inherit;
-            padding: 1px 0;
+            display: inline-block;
+            background: #facc15;
+            padding: 0 2px;
+            border-radius: 2px;
+            box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.15);
         }
 
         sup.t-badge {
@@ -456,8 +437,8 @@
 
         @if(empty($pageImages))
             <div class="fallback-note">
-                Pratinjau halaman dokumen tidak tersedia. Pastikan Python dengan PyMuPDF terpasang
-                (<code>pip install pymupdf</code>) agar halaman Word/PDF ditampilkan sebagai gambar.
+                Pratinjau halaman dokumen tidak tersedia. Pastikan Node.js dan utilitas PDF sistem tersedia
+                agar halaman Word/PDF dapat ditampilkan.
             </div>
         @endif
 
@@ -487,7 +468,7 @@
 
         {{-- PRIMARY SOURCES --}}
         @php
-            $visibleSources = $check->sources->filter(fn($s) => $s->matched_words < 1000 && $s->matched_words > 0);
+            $visibleSources = $check->sources->filter(fn($s) => $s->matched_words > 0);
         @endphp
 
         @if($visibleSources->isEmpty())
@@ -540,7 +521,7 @@
                             </td>
                             <td class="source-stats-cell">
                                 <span class="source-words"
-                                    style="font-size: 13px; color: #4b5563; font-weight: normal; margin-right: 4px;">{{ $source->matched_words }}
+                                    style="font-size: 13px; color: #4b5563; font-weight: normal; margin-right: 4px;">{{ $source->matched_words >= 1000 ? '100+' : $source->matched_words }}
                                     words &mdash;</span>
                                 <span class="source-percent">{{ $source->turnitin_percentage }}</span>
                             </td>
@@ -548,18 +529,6 @@
                     @endforeach
                 </tbody>
             </table>
-        @endif
-
-        {{-- HIGHLIGHTED TEXT (jika ada) --}}
-        @if(!empty(trim($highlightedText)))
-            <div class="highlight-section-label">Naskah dengan Highlight Plagiarisme</div>
-            <p class="highlight-section-desc">
-                Teks yang disorot menunjukkan kecocokan dengan sumber eksternal. Nomor pada supersekuen sesuai dengan daftar
-                Primary Sources di atas.
-            </p>
-            <div class="content">
-                {!! $highlightedText !!}
-            </div>
         @endif
 
         <div class="footer" style="text-align: left; font-size: 11px; color: #6b7280; opacity: 0.5; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; line-height: 1.6; margin-top: 30px; border-top: 1px solid #e5e7eb; padding-top: 12px;">

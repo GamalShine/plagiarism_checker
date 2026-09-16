@@ -67,6 +67,61 @@ class PlagiarismResultSourceNavigationTest extends TestCase
         $response->assertSee('mark.t-highlight', false);
     }
 
+    public function test_highlight_markup_uses_pdf_safe_solid_colors(): void
+    {
+        $user = User::factory()->create();
+
+        $document = Document::create([
+            'user_id' => $user->id,
+            'title' => 'Sample Document',
+            'file_path' => 'documents/sample.pdf',
+            'original_filename' => 'sample.pdf',
+            'type' => 'plagiarism',
+            'status' => 'completed',
+            'content' => "This is a sample sentence.",
+            'file_size' => 1000,
+            'mime_type' => 'application/pdf',
+        ]);
+
+        $check = PlagiarismCheck::create([
+            'document_id' => $document->id,
+            'user_id' => $user->id,
+            'status' => 'completed',
+            'total_similarity' => 50,
+            'sources_checked' => ['web'],
+        ]);
+
+        $source = PlagiarismSource::create([
+            'plagiarism_check_id' => $check->id,
+            'source_name' => 'web',
+            'source_label' => 'Website Source',
+            'similarity_score' => 50,
+            'title' => 'Example Source Title',
+            'url' => 'https://example.com',
+            'color_code' => '#ff0000',
+        ]);
+
+        PlagiarismHighlight::create([
+            'plagiarism_check_id' => $check->id,
+            'plagiarism_source_id' => $source->id,
+            'original_text' => 'sample sentence',
+            'matched_text' => 'sample sentence',
+            'color_code' => '#ff0000',
+            'start_position' => 10,
+            'end_position' => 25,
+            'match_percentage' => 80,
+        ]);
+
+        $controller = app(\App\Http\Controllers\PlagiarismController::class);
+        $html = $controller->buildHighlightedText($check, [$source->id => 1]);
+
+        $this->assertStringContainsString('<span class="t-highlight"', $html);
+        $this->assertStringContainsString('background: #ff0000', strtolower($html));
+        $this->assertStringNotContainsString('<mark class="t-highlight"', $html);
+        $this->assertStringNotContainsString('#ff000033', strtolower($html));
+        $this->assertStringNotContainsString('#ff000066', strtolower($html));
+    }
+
     public function test_similarity_percentages_and_turnitin_percentage_calculation(): void
     {
         $user = User::factory()->create();

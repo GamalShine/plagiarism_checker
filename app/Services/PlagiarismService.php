@@ -295,34 +295,81 @@ class PlagiarismService
             ]);
         }
 
-        foreach ($sentenceResults as $result) {
-            if ($result['similarity'] <= (int) (self::MATCH_THRESHOLD * 100)) {
-                continue;
-            }
+        $highlightedSourceIds = [];
+        $createdHighlightKeys = [];
 
-            $best = $result['bestMatch'];
-            if (!$best) {
-                continue;
-            }
-
-            $sourceKey = $this->sourceKey($best);
+        foreach ($allMatches as $match) {
+            $sourceKey = $this->sourceKey($match);
             $sourceModel = $savedSources[$sourceKey] ?? null;
             if (!$sourceModel) {
                 continue;
             }
 
-            $positions = $this->findSentencePosition($documentContent, $result['sentence']);
+            $sentence = trim((string) ($match['sentence'] ?? ''));
+            if ($sentence === '') {
+                continue;
+            }
+
+            $highlightKey = $sourceModel->id . '|' . md5($sentence);
+            if (isset($createdHighlightKeys[$highlightKey])) {
+                continue;
+            }
+
+            $positions = $this->findSentencePosition($documentContent, $sentence);
+            if (!$positions) {
+                continue;
+            }
 
             PlagiarismHighlight::create([
                 'plagiarism_check_id' => $check->id,
                 'plagiarism_source_id' => $sourceModel->id,
-                'original_text' => $result['sentence'],
-                'matched_text' => mb_substr($best['content'] ?? $best['title'], 0, 500),
+                'original_text' => $sentence,
+                'matched_text' => mb_substr($match['content'] ?? $match['title'] ?? '', 0, 500),
                 'color_code' => $sourceModel->color_code,
-                'match_percentage' => (int) $result['similarity'],
+                'match_percentage' => (int) ($match['similarity'] ?? 0),
                 'start_position' => $positions['start'] ?? 0,
                 'end_position' => $positions['end'] ?? 0,
             ]);
+            $highlightedSourceIds[$sourceModel->id] = true;
+            $createdHighlightKeys[$highlightKey] = true;
+        }
+
+        // Some sources are aggregated from search results without a sentence-level match.
+        // Add a highlight only when the source snippet/title is actually present in the document.
+        foreach ($savedSources as $key => $sourceModel) {
+            if (isset($highlightedSourceIds[$sourceModel->id])) {
+                continue;
+            }
+
+            $bestMatch = $sourceStats[$key]['bestMatch'] ?? [];
+            $candidates = [
+                trim((string) ($bestMatch['content'] ?? '')),
+                trim((string) ($bestMatch['title'] ?? '')),
+            ];
+
+            foreach ($candidates as $candidate) {
+                if (mb_strlen($candidate) < 10) {
+                    continue;
+                }
+
+                $candidate = mb_substr($candidate, 0, 500);
+                $start = mb_stripos($documentContent, $candidate);
+                if ($start === false) {
+                    continue;
+                }
+
+                PlagiarismHighlight::create([
+                    'plagiarism_check_id' => $check->id,
+                    'plagiarism_source_id' => $sourceModel->id,
+                    'original_text' => $candidate,
+                    'matched_text' => $candidate,
+                    'color_code' => $sourceModel->color_code,
+                    'match_percentage' => (int) $sourceModel->similarity_score,
+                    'start_position' => $start,
+                    'end_position' => $start + mb_strlen($candidate),
+                ]);
+                break;
+            }
         }
 
         $check->update([

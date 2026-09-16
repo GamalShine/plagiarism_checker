@@ -58,6 +58,92 @@ class DocumentPageRenderer
         return is_file($cachedPdf) ? $cachedPdf : $pdfPath;
     }
 
+    public function resolveSourcePdfWithoutShell(string $filePath, int $documentId, array $highlights = []): ?string
+    {
+        if (! is_file($filePath)) {
+            return null;
+        }
+
+        $extension = strtolower(pathinfo($filePath, PATHINFO_EXTENSION));
+        if ($extension === 'pdf') {
+            return $filePath;
+        }
+
+        if ($extension !== 'docx') {
+            return null;
+        }
+
+        $cacheDir = $this->cacheDirectory($documentId, $filePath);
+        $cachedPdf = $cacheDir . DIRECTORY_SEPARATOR . 'phpword-source.pdf';
+
+        if (is_file($cachedPdf) && filesize($cachedPdf) > 0) {
+            return $cachedPdf;
+        }
+
+        File::ensureDirectoryExists($cacheDir);
+
+        $pdfPath = null;
+        if (function_exists('shell_exec')) {
+            if (PHP_OS_FAMILY === 'Windows' && $highlights !== []) {
+                $pdfPath = $this->convertDocxWithWordHighlights($filePath, $cacheDir, $highlights);
+            }
+
+            foreach ([
+                fn () => $this->convertDocxWithMicrosoftWord($filePath, $cacheDir),
+                fn () => $this->convertDocxWithLibreOffice($filePath, $cacheDir),
+                fn () => $this->convertDocxWithBrowser($filePath, $cacheDir),
+            ] as $convert) {
+                $pdfPath = $convert();
+                if ($pdfPath) {
+                    break;
+                }
+            }
+        }
+
+        $pdfPath ??= $this->convertDocxWithPhpWord($filePath, $cacheDir);
+
+        if ($pdfPath && $pdfPath !== $cachedPdf && is_file($pdfPath)) {
+            @copy($pdfPath, $cachedPdf);
+        }
+
+        return is_file($cachedPdf) && filesize($cachedPdf) > 0 ? $cachedPdf : null;
+    }
+
+    private function convertDocxWithWordHighlights(string $filePath, string $cacheDir, array $highlights): ?string
+    {
+        $script = base_path('scripts/docx_to_highlighted_pdf.ps1');
+        if (! is_file($script)) {
+            return null;
+        }
+
+        $outputPath = $cacheDir . DIRECTORY_SEPARATOR . 'highlighted-source.pdf';
+        $highlightsPath = $cacheDir . DIRECTORY_SEPARATOR . 'highlights.json';
+        file_put_contents($highlightsPath, json_encode(array_map(
+            fn ($highlight) => ['text' => $highlight->original_text],
+            $highlights,
+        ), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+
+        $command = sprintf(
+            'powershell -NoProfile -ExecutionPolicy Bypass -File %s -InputPath %s -OutputPath %s -HighlightsPath %s 2>&1',
+            escapeshellarg($script),
+            escapeshellarg($filePath),
+            escapeshellarg($outputPath),
+            escapeshellarg($highlightsPath),
+        );
+
+        $output = shell_exec($command);
+        if (is_file($outputPath) && filesize($outputPath) > 0) {
+            return $outputPath;
+        }
+
+        Log::warning('DOCX highlight conversion failed', [
+            'file' => $filePath,
+            'output' => $output,
+        ]);
+
+        return null;
+    }
+
     private function renderPdfPages(string $pdfPath, int $documentId, string $originalFilePath): array
     {
         $cacheDir = $this->cacheDirectory($documentId, $originalFilePath);
@@ -266,80 +352,7 @@ class DocumentPageRenderer
 
     private function convertPdfToImages(string $pdfPath, string $cacheDir): array
     {
-        $pythonImages = $this->convertPdfWithPython($pdfPath, $cacheDir);
-        if ($pythonImages !== []) {
-            return $pythonImages;
-        }
-
         return $this->convertPdfWithPdftoppm($pdfPath, $cacheDir);
-    }
-
-    private function convertPdfWithPython(string $pdfPath, string $cacheDir): array
-    {
-        if (! function_exists('shell_exec')) {
-            return [];
-        }
-
-        $python = $this->findPythonBinary();
-        $script = base_path('scripts/pdf_to_images.py');
-
-        if (!$python || !is_file($script)) {
-            return [];
-        }
-
-        $dpi = (int) env('PDF_PAGE_DPI', 120);
-        $jpegQuality = (int) env('PDF_PAGE_JPEG_QUALITY', 85);
-        $maxPages = (int) env('PDF_PAGE_MAX', self::MAX_PAGES);
-
-        $command = sprintf(
-            '%s %s %s %s --dpi %d --jpeg-quality %d --max-pages %d 2>&1',
-            escapeshellarg($python),
-            escapeshellarg($script),
-            escapeshellarg($pdfPath),
-            escapeshellarg($cacheDir),
-            $dpi,
-            $jpegQuality,
-            $maxPages
-        );
-
-        $output = shell_exec($command);
-        $resultFile = $cacheDir . DIRECTORY_SEPARATOR . 'conversion_result.json';
-
-        if (is_file($resultFile)) {
-            $decoded = json_decode((string) file_get_contents($resultFile), true);
-        } elseif (is_string($output) && trim($output) !== '') {
-            $decoded = json_decode(trim($output), true);
-        } else {
-            return [];
-        }
-        if (!is_array($decoded)) {
-            Log::warning('PDF to image conversion returned invalid JSON', ['output' => $output]);
-            return [];
-        }
-
-        if (!empty($decoded['error'])) {
-            Log::warning('PDF to image conversion failed', ['error' => $decoded['error']]);
-            return [];
-        }
-
-        $pages = array_values(array_filter(
-            $decoded['pages'] ?? [],
-            fn ($page) => is_array($page) && is_string($page['path'] ?? null) && is_file($page['path'])
-        ));
-
-        if ($pages !== []) {
-            return $pages;
-        }
-
-        $images = array_values(array_filter(
-            $decoded['images'] ?? [],
-            fn ($path) => is_string($path) && is_file($path)
-        ));
-
-        return array_map(
-            fn (string $path) => ['path' => $path],
-            $images
-        );
     }
 
     private function convertPdfWithPdftoppm(string $pdfPath, string $cacheDir): array
@@ -374,29 +387,6 @@ class DocumentPageRenderer
             fn (string $path) => ['path' => $path],
             array_values($images)
         );
-    }
-
-    private function findPythonBinary(): ?string
-    {
-        $candidates = array_filter([
-            env('PYTHON_PATH'),
-            'C:\\laragon\\bin\\python\\python-3.13\\python.exe',
-            'C:\\laragon\\bin\\python\\python-3.12\\python.exe',
-            'python3',
-            'python',
-        ]);
-
-        foreach ($candidates as $candidate) {
-            if (in_array($candidate, ['python', 'python3'], true)) {
-                return $candidate;
-            }
-
-            if (is_string($candidate) && is_file($candidate)) {
-                return $candidate;
-            }
-        }
-
-        return null;
     }
 
     private function findLibreOfficeBinary(): ?string

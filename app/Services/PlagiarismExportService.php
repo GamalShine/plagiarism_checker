@@ -7,6 +7,7 @@ use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use setasign\Fpdi\Fpdi;
 use Symfony\Component\HttpFoundation\Response;
 
 class PlagiarismExportService
@@ -25,11 +26,7 @@ class PlagiarismExportService
         @set_time_limit(0);
 
         if (filter_var(env('PDF_LIGHTWEIGHT', false), FILTER_VALIDATE_BOOL) || ! function_exists('shell_exec')) {
-            return $this->renderSummaryPdf(
-                $check,
-                $downloadName,
-                $includeAllSources,
-            );
+            return $this->renderFallbackPdf($check, $downloadName, $includeAllSources);
         }
 
         $tempDir = storage_path('app/temp/exports/' . $check->id . '_' . time());
@@ -38,14 +35,21 @@ class PlagiarismExportService
         $coverPath = $tempDir . DIRECTORY_SEPARATOR . 'cover.pdf';
         $reportPath = $tempDir . DIRECTORY_SEPARATOR . 'report.pdf';
         $mergedPath = $tempDir . DIRECTORY_SEPARATOR . 'merged.pdf';
-        $sourceImagesManifest = $tempDir . DIRECTORY_SEPARATOR . 'source_images.json';
         $highlightsManifest = $tempDir . DIRECTORY_SEPARATOR . 'highlights.json';
 
         $filePath = $check->document->file_path
             ? Storage::disk('public')->path($check->document->file_path)
             : '';
+        $exportCachePath = $this->exportCachePath($check, $filePath, $highlightedText, $includeAllSources);
+
+        if ($exportCachePath && is_file($exportCachePath) && filesize($exportCachePath) > 0) {
+            return response()->download($exportCachePath, $downloadName, [
+                'Content-Type' => 'application/pdf',
+            ]);
+        }
+
         $sourcePdf = $this->documentPageRenderer->resolveSourcePdf($filePath, $check->document->id);
-        $pageImages = $sourcePdf ? [] : $this->documentPageRenderer->renderPages($filePath, $check->document->id);
+        $pageImages = [];
 
         $this->ensureHangulFont();
 
@@ -53,12 +57,39 @@ class PlagiarismExportService
             fn ($source, $index) => [$source->id => $source->turnitin_index ?? ($index + 1)]
         );
 
-        file_put_contents($highlightsManifest, json_encode(
-            $check->highlights->map(fn ($highlight) => [
+        $exportHighlights = $check->highlights->map(fn ($highlight) => [
                 'text' => $highlight->original_text,
                 'color' => $highlight->color_code ?? $highlight->source?->color_code ?? '#ef4444',
                 'source_index' => $sourceIndexes[$highlight->plagiarism_source_id] ?? 0,
-            ])->values()->all(),
+            ])->values()->all();
+
+        $highlightedSourceIds = $check->highlights
+            ->pluck('plagiarism_source_id')
+            ->unique()
+            ->all();
+
+        foreach ($check->sources as $source) {
+            if (in_array($source->id, $highlightedSourceIds, true)) {
+                continue;
+            }
+
+            foreach ([(string) $source->snippet, (string) $source->title] as $candidate) {
+                $candidate = trim($candidate);
+                if (mb_strlen($candidate) < 10) {
+                    continue;
+                }
+
+                $exportHighlights[] = [
+                    'text' => mb_substr($candidate, 0, 500),
+                    'color' => $source->color_code ?? '#ef4444',
+                    'source_index' => $sourceIndexes[$source->id] ?? 0,
+                ];
+                break;
+            }
+        }
+
+        file_put_contents($highlightsManifest, json_encode(
+            $exportHighlights,
             JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
         ));
 
@@ -69,31 +100,26 @@ class PlagiarismExportService
             $reportPath
         );
 
-        if ($pageImages !== []) {
-            file_put_contents($sourceImagesManifest, json_encode([
-                'pages' => array_values($pageImages),
-            ]));
-        }
-
-        if (($pageImages !== [] || $sourcePdf) && $this->mergePdfs(
+        if ($sourcePdf && $this->mergePdfs(
             $mergedPath,
             $coverPath,
             $reportPath,
-            $pageImages !== [] ? $sourceImagesManifest : null,
             $sourcePdf,
             $highlightsManifest,
             'trn:oid:::9817:193844' . str_pad((string) $check->document_id, 3, '0', STR_PAD_LEFT)
         )) {
             @unlink($coverPath);
             @unlink($reportPath);
-            if (is_file($sourceImagesManifest)) {
-                @unlink($sourceImagesManifest);
-            }
             @unlink($highlightsManifest);
 
-            return response()->download($mergedPath, $downloadName, [
+            if ($exportCachePath) {
+                @copy($mergedPath, $exportCachePath);
+                @unlink($mergedPath);
+            }
+
+            return response()->download($exportCachePath ?: $mergedPath, $downloadName, [
                 'Content-Type' => 'application/pdf',
-            ])->deleteFileAfterSend(true);
+            ])->deleteFileAfterSend(! $exportCachePath);
         }
 
         Log::warning('PDF merge unavailable, falling back to single PDF export', [
@@ -104,9 +130,6 @@ class PlagiarismExportService
 
         @unlink($coverPath);
         @unlink($reportPath);
-        if (is_file($sourceImagesManifest)) {
-            @unlink($sourceImagesManifest);
-        }
         @unlink($highlightsManifest);
 
         return $this->renderReportPdf(
@@ -145,9 +168,12 @@ class PlagiarismExportService
         string $downloadName,
         bool $includeAllSources = false,
     ): Response {
+        $check->loadMissing(['document', 'sources', 'highlights.source']);
+        $highlightedText = $this->buildLightweightHighlightedText($check);
+
         return Pdf::loadView('plagiarism.export_report', [
             'check' => $check,
-            'highlightedText' => '',
+            'highlightedText' => $highlightedText,
             'includeAllSources' => $includeAllSources,
         ])
             ->setPaper('a4', 'portrait')
@@ -157,6 +183,115 @@ class PlagiarismExportService
                 'chroot' => base_path(),
             ])
             ->download($downloadName);
+    }
+
+    private function buildLightweightHighlightedText(PlagiarismCheck $check): string
+    {
+        $content = trim((string) $check->document->content);
+        if ($content === '') {
+            return '';
+        }
+
+        $text = htmlspecialchars(mb_substr($content, 0, 120000), ENT_QUOTES, 'UTF-8');
+        $highlights = $check->highlights
+            ->filter(fn ($highlight) => mb_strlen(trim((string) $highlight->original_text)) >= 10)
+            ->sortByDesc(fn ($highlight) => mb_strlen((string) $highlight->original_text))
+            ->take(100);
+
+        foreach ($highlights as $highlight) {
+            $needle = htmlspecialchars(trim((string) $highlight->original_text), ENT_QUOTES, 'UTF-8');
+            if ($needle === '') {
+                continue;
+            }
+
+            $color = $highlight->color_code ?? $highlight->source?->color_code ?? '#facc15';
+            $safeColor = preg_match('/^#?[0-9a-fA-F]{6,8}$/', (string) $color) ? '#' . strtoupper(substr(preg_replace('/[^0-9A-Fa-f]/', '', (string) $color), 0, 6)) : '#FACC15';
+            $replacement = '<span style="display:inline-block; background:' . htmlspecialchars($safeColor, ENT_QUOTES, 'UTF-8') . '; border-bottom:2px solid ' . htmlspecialchars($safeColor, ENT_QUOTES, 'UTF-8') . '; padding:0 2px; border-radius:2px;">' . $needle . '</span>';
+            $text = str_replace($needle, $replacement, $text);
+        }
+
+        return nl2br($text);
+    }
+
+    private function renderFallbackPdf(
+        PlagiarismCheck $check,
+        string $downloadName,
+        bool $includeAllSources = false,
+    ): Response {
+        $filePath = $check->document->file_path
+            ? Storage::disk('public')->path($check->document->file_path)
+            : '';
+
+        $sourcePdf = $this->documentPageRenderer->resolveSourcePdfWithoutShell(
+            $filePath,
+            $check->document->id,
+            $check->highlights->all(),
+        );
+
+        if (! $sourcePdf) {
+            return $this->renderSummaryPdf($check, $downloadName, $includeAllSources);
+        }
+
+        $tempDir = storage_path('app/temp/exports/no-python_' . $check->id . '_' . time());
+        File::ensureDirectoryExists($tempDir);
+        $coverPath = $tempDir . DIRECTORY_SEPARATOR . 'cover.pdf';
+        $reportPath = $tempDir . DIRECTORY_SEPARATOR . 'report.pdf';
+        $mergedPath = $tempDir . DIRECTORY_SEPARATOR . 'merged.pdf';
+
+        try {
+            $this->renderPartialPdf('plagiarism.export_cover', compact('check'), $coverPath);
+            $this->renderPartialPdf('plagiarism.export_report', [
+                'check' => $check,
+                'highlightedText' => '',
+                'includeAllSources' => $includeAllSources,
+            ], $reportPath);
+
+            if ($this->mergePdfFiles($mergedPath, [$coverPath, $sourcePdf, $reportPath])) {
+                return response()->download($mergedPath, $downloadName, [
+                    'Content-Type' => 'application/pdf',
+                ])->deleteFileAfterSend(true);
+            }
+        } catch (\Throwable $e) {
+            Log::warning('No-Python PDF export failed', [
+                'check_id' => $check->id,
+                'error' => $e->getMessage(),
+            ]);
+        } finally {
+            @unlink($coverPath);
+            @unlink($reportPath);
+        }
+
+        return $this->renderSummaryPdf($check, $downloadName, $includeAllSources);
+    }
+
+    private function mergePdfFiles(string $outputPath, array $pdfPaths): bool
+    {
+        $pdf = new Fpdi();
+        $importedPage = false;
+
+        foreach ($pdfPaths as $pdfPath) {
+            if (! is_string($pdfPath) || ! is_file($pdfPath) || filesize($pdfPath) <= 0) {
+                continue;
+            }
+
+            $pageCount = $pdf->setSourceFile($pdfPath);
+            for ($pageNumber = 1; $pageNumber <= $pageCount; $pageNumber++) {
+                $template = $pdf->importPage($pageNumber);
+                $size = $pdf->getTemplateSize($template);
+                $orientation = $size['width'] > $size['height'] ? 'L' : 'P';
+                $pdf->AddPage($orientation, [$size['width'], $size['height']]);
+                $pdf->useTemplate($template, 0, 0, $size['width'], $size['height']);
+                $importedPage = true;
+            }
+        }
+
+        if (! $importedPage) {
+            return false;
+        }
+
+        $pdf->Output('F', $outputPath);
+
+        return is_file($outputPath) && filesize($outputPath) > 0;
     }
 
     private function renderPartialPdf(string $view, array $data, string $outputPath): void
@@ -192,57 +327,41 @@ class PlagiarismExportService
         string $outputPath,
         string $coverPath,
         string $reportPath,
-        ?string $sourceImagesManifest = null,
         ?string $sourcePath = null,
         ?string $highlightsManifest = null,
         ?string $submissionId = null
     ): bool {
-        if (! function_exists('shell_exec')) {
+        if (! function_exists('shell_exec') || ! $sourcePath) {
             return false;
         }
 
-        $python = $this->findPythonBinary();
-        $script = base_path('scripts/merge_pdfs.py');
+        $node = $this->findNodeBinary();
+        $script = base_path('scripts/merge_pdfs.mjs');
 
-        if (!$python || !is_file($script)) {
-            return false;
-        }
-
-        if (!$sourceImagesManifest && !$sourcePath) {
+        if (!$node || !is_file($script)) {
             return false;
         }
 
         $maxPages = (int) env('PDF_PAGE_MAX', 200);
-        $jpegQuality = (int) env('PDF_PAGE_JPEG_QUALITY', 70);
-        $sourceDpi = (int) env('PDF_SOURCE_DPI', 96);
         $submissionId = $submissionId ?? '';
 
         $command = sprintf(
-            '%s %s %s --cover %s --report %s --max-pages %d --jpeg-quality %d --source-dpi %d --submission-id %s',
-            escapeshellarg($python),
+            '%s %s %s --cover %s --source %s --report %s --highlights %s --max-pages %d',
+            escapeshellarg($node),
             escapeshellarg($script),
             escapeshellarg($outputPath),
             escapeshellarg($coverPath),
+            escapeshellarg($sourcePath),
             escapeshellarg($reportPath),
-            $maxPages,
-            $jpegQuality,
-            $sourceDpi,
-            escapeshellarg($submissionId)
+            escapeshellarg($highlightsManifest ?? ''),
+            $maxPages
         );
 
-        if ($sourceImagesManifest) {
-            $command .= ' --source-images ' . escapeshellarg($sourceImagesManifest);
-        } elseif ($sourcePath) {
-            $command .= ' --source ' . escapeshellarg($sourcePath) . ' --source-as-images';
-        }
-
-        if ($highlightsManifest && is_file($highlightsManifest)) {
-            $command .= ' --highlights ' . escapeshellarg($highlightsManifest);
-        }
-
-        $command .= ' 2>&1';
+        $stderrPath = $outputPath . '.stderr';
+        $command .= ' 2> ' . escapeshellarg($stderrPath);
 
         $output = shell_exec($command);
+        @unlink($stderrPath);
         if (!is_string($output) || trim($output) === '') {
             return false;
         }
@@ -260,18 +379,16 @@ class PlagiarismExportService
         return is_file($outputPath) && filesize($outputPath) > 0;
     }
 
-    private function findPythonBinary(): ?string
+    private function findNodeBinary(): ?string
     {
         $candidates = array_filter([
-            env('PYTHON_PATH'),
-            'C:\\laragon\\bin\\python\\python-3.13\\python.exe',
-            'C:\\laragon\\bin\\python\\python-3.12\\python.exe',
-            'python3',
-            'python',
+            env('NODE_PATH'),
+            'C:\\Program Files\\nodejs\\node.exe',
+            'node',
         ]);
 
         foreach ($candidates as $candidate) {
-            if (in_array($candidate, ['python', 'python3'], true)) {
+            if ($candidate === 'node') {
                 return $candidate;
             }
 
@@ -281,5 +398,33 @@ class PlagiarismExportService
         }
 
         return null;
+    }
+
+    private function exportCachePath(
+        PlagiarismCheck $check,
+        string $filePath,
+        string $highlightedText,
+        bool $includeAllSources,
+    ): ?string {
+        if (! filter_var(env('PDF_EXPORT_CACHE', true), FILTER_VALIDATE_BOOL)) {
+            return null;
+        }
+
+        $sourceStamp = is_file($filePath)
+            ? (string) (filemtime($filePath) ?: 0) . ':' . (string) (filesize($filePath) ?: 0)
+            : 'missing';
+        $cacheKey = sha1(implode('|', [
+            $check->id,
+            (string) $check->updated_at,
+            $sourceStamp,
+            $highlightedText,
+            $includeAllSources ? 'all' : 'primary',
+            (string) env('PDF_PAGE_MAX', 200),
+            'source-snippet-fallback-v1',
+        ]));
+        $directory = storage_path('app/temp/exports/cache');
+        File::ensureDirectoryExists($directory);
+
+        return $directory . DIRECTORY_SEPARATOR . $cacheKey . '.pdf';
     }
 }
