@@ -58,21 +58,6 @@ class DocumentPageRenderer
         return is_file($cachedPdf) ? $cachedPdf : $pdfPath;
     }
 
-    public function cachedSourcePdf(string $filePath, int $documentId): ?string
-    {
-        if (! is_file($filePath)) {
-            return null;
-        }
-
-        if (strtolower(pathinfo($filePath, PATHINFO_EXTENSION)) === 'pdf') {
-            return $filePath;
-        }
-
-        $cachedPdf = $this->cacheDirectory($documentId, $filePath) . DIRECTORY_SEPARATOR . 'source.pdf';
-
-        return is_file($cachedPdf) && filesize($cachedPdf) > 0 ? $cachedPdf : null;
-    }
-
     public function resolveSourcePdfWithoutShell(string $filePath, int $documentId, array $highlights = []): ?string
     {
         if (! is_file($filePath)) {
@@ -89,12 +74,7 @@ class DocumentPageRenderer
         }
 
         $cacheDir = $this->cacheDirectory($documentId, $filePath);
-        $convertedPdf = $cacheDir . DIRECTORY_SEPARATOR . 'source.pdf';
         $cachedPdf = $cacheDir . DIRECTORY_SEPARATOR . 'phpword-source.pdf';
-
-        if (is_file($convertedPdf) && filesize($convertedPdf) > 0) {
-            return $convertedPdf;
-        }
 
         if (is_file($cachedPdf) && filesize($cachedPdf) > 0) {
             return $cachedPdf;
@@ -372,7 +352,80 @@ class DocumentPageRenderer
 
     private function convertPdfToImages(string $pdfPath, string $cacheDir): array
     {
+        $pythonImages = $this->convertPdfWithPython($pdfPath, $cacheDir);
+        if ($pythonImages !== []) {
+            return $pythonImages;
+        }
+
         return $this->convertPdfWithPdftoppm($pdfPath, $cacheDir);
+    }
+
+    private function convertPdfWithPython(string $pdfPath, string $cacheDir): array
+    {
+        if (! function_exists('shell_exec')) {
+            return [];
+        }
+
+        $python = $this->findPythonBinary();
+        $script = base_path('scripts/pdf_to_images.py');
+
+        if (!$python || !is_file($script)) {
+            return [];
+        }
+
+        $dpi = (int) env('PDF_PAGE_DPI', 120);
+        $jpegQuality = (int) env('PDF_PAGE_JPEG_QUALITY', 85);
+        $maxPages = (int) env('PDF_PAGE_MAX', self::MAX_PAGES);
+
+        $command = sprintf(
+            '%s %s %s %s --dpi %d --jpeg-quality %d --max-pages %d 2>&1',
+            escapeshellarg($python),
+            escapeshellarg($script),
+            escapeshellarg($pdfPath),
+            escapeshellarg($cacheDir),
+            $dpi,
+            $jpegQuality,
+            $maxPages
+        );
+
+        $output = shell_exec($command);
+        $resultFile = $cacheDir . DIRECTORY_SEPARATOR . 'conversion_result.json';
+
+        if (is_file($resultFile)) {
+            $decoded = json_decode((string) file_get_contents($resultFile), true);
+        } elseif (is_string($output) && trim($output) !== '') {
+            $decoded = json_decode(trim($output), true);
+        } else {
+            return [];
+        }
+        if (!is_array($decoded)) {
+            Log::warning('PDF to image conversion returned invalid JSON', ['output' => $output]);
+            return [];
+        }
+
+        if (!empty($decoded['error'])) {
+            Log::warning('PDF to image conversion failed', ['error' => $decoded['error']]);
+            return [];
+        }
+
+        $pages = array_values(array_filter(
+            $decoded['pages'] ?? [],
+            fn ($page) => is_array($page) && is_string($page['path'] ?? null) && is_file($page['path'])
+        ));
+
+        if ($pages !== []) {
+            return $pages;
+        }
+
+        $images = array_values(array_filter(
+            $decoded['images'] ?? [],
+            fn ($path) => is_string($path) && is_file($path)
+        ));
+
+        return array_map(
+            fn (string $path) => ['path' => $path],
+            $images
+        );
     }
 
     private function convertPdfWithPdftoppm(string $pdfPath, string $cacheDir): array
@@ -407,6 +460,29 @@ class DocumentPageRenderer
             fn (string $path) => ['path' => $path],
             array_values($images)
         );
+    }
+
+    private function findPythonBinary(): ?string
+    {
+        $candidates = array_filter([
+            env('PYTHON_PATH'),
+            'C:\\laragon\\bin\\python\\python-3.13\\python.exe',
+            'C:\\laragon\\bin\\python\\python-3.12\\python.exe',
+            'python3',
+            'python',
+        ]);
+
+        foreach ($candidates as $candidate) {
+            if (in_array($candidate, ['python', 'python3'], true)) {
+                return $candidate;
+            }
+
+            if (is_string($candidate) && is_file($candidate)) {
+                return $candidate;
+            }
+        }
+
+        return null;
     }
 
     private function findLibreOfficeBinary(): ?string

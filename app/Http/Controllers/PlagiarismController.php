@@ -258,12 +258,8 @@ class PlagiarismController extends Controller
         Gate::authorize('view', $plagiarismCheck);
 
         $filePath = \Illuminate\Support\Facades\Storage::disk('public')->path($plagiarismCheck->document->file_path);
-        $pdfPath = $this->plagiarismExportService->cachedHighlightedSourcePdf($plagiarismCheck);
-
-        if (! $pdfPath) {
-            $renderer = app(\App\Services\DocumentPageRenderer::class);
-            $pdfPath = $renderer->cachedSourcePdf($filePath, $plagiarismCheck->document->id);
-        }
+        $renderer = app(\App\Services\DocumentPageRenderer::class);
+        $pdfPath = $renderer->resolveSourcePdf($filePath, $plagiarismCheck->document->id);
 
         if (!$pdfPath || !file_exists($pdfPath)) {
             // Fallback to original if it's already a PDF
@@ -317,8 +313,7 @@ class PlagiarismController extends Controller
                 $color = $highlight->source->color_code ?? '#ff0000';
 
                 $badge = "<sup class=\"t-badge\" style=\"background-color: {$color};\" title=\"" . htmlspecialchars($highlight->source->source_label ?? '') . " ({$highlight->match_percentage}%)\">{$tIndex}</sup>";
-                $highlightColor = $this->normalizePdfSafeHighlightColor($color);
-                $replacement = "<span class=\"t-highlight\" data-source-id=\"{$sourceId}\" data-source-index=\"{$tIndex}\" data-source-color=\"{$color}\" style=\"display: inline-block; background: {$highlightColor}; border-bottom: 2px solid {$highlightColor}; padding: 0 2px; border-radius: 2px;\">{$badge}{$needle}</span>";
+                $replacement = "<mark class=\"t-highlight\" data-source-id=\"{$sourceId}\" data-source-index=\"{$tIndex}\" data-source-color=\"{$color}\" style=\"background-color: {$color}33; border-bottom: 2px solid {$color};\">{$badge}{$needle}</mark>";
 
                 $text = str_replace($needle, $replacement, $text);
             }
@@ -405,31 +400,11 @@ class PlagiarismController extends Controller
 
             $tIndex = $sourceIndexMap[$segment['source_id']] ?? '*';
             $color = $segment['color'];
-            $safeColor = $this->normalizePdfSafeHighlightColor($color);
             $badge = "<sup class=\"t-badge\" style=\"background-color: {$color};\" title=\"" . htmlspecialchars($segment['label']) . " ({$segment['percentage']}%)\">{$tIndex}</sup>";
-            $html .= "<span class=\"t-highlight\" data-source-id=\"{$segment['source_id']}\" data-source-index=\"{$tIndex}\" data-source-color=\"{$color}\" style=\"display: inline-block; background: {$safeColor}; border-bottom: 2px solid {$safeColor}; padding: 0 2px; border-radius: 2px;\">{$badge}" . htmlspecialchars($segment['content']) . '</span>';
+            $html .= "<mark class=\"t-highlight\" data-source-id=\"{$segment['source_id']}\" data-source-index=\"{$tIndex}\" data-source-color=\"{$color}\" style=\"background-color: {$color}66;\">{$badge}" . htmlspecialchars($segment['content']) . '</mark>';
         }
 
         return nl2br($html);
-    }
-
-    private function normalizePdfSafeHighlightColor(string $color): string
-    {
-        $value = trim((string) $color);
-        if ($value === '') {
-            return '#facc15';
-        }
-
-        $hex = preg_replace('/\s+/', '', $value);
-        if (preg_match('/^#?([0-9a-fA-F]{6})$/', $hex, $matches)) {
-            return '#' . strtoupper($matches[1]);
-        }
-
-        if (preg_match('/^#?([0-9a-fA-F]{8})$/', $hex, $matches)) {
-            return '#' . strtoupper(substr($matches[1], 0, 6));
-        }
-
-        return '#facc15';
     }
 
     private function routePrefix(): string

@@ -232,29 +232,6 @@
         margin-top: 18px;
     }
 
-    span.t-highlight,
-    mark.t-highlight {
-        display: inline-block;
-        background: #facc15;
-        color: inherit;
-        padding: 0 2px;
-        border-radius: 2px;
-        box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.15);
-    }
-
-    sup.t-badge {
-        display: inline-block;
-        background: #111827;
-        color: #ffffff;
-        font-size: 8px;
-        font-weight: 700;
-        padding: 1px 4px;
-        margin-right: 4px;
-        border-radius: 3px;
-        vertical-align: super;
-        line-height: 1.2;
-    }
-
     .highlight-item {
         margin-bottom: 8px;
         padding: 7px 9px;
@@ -322,7 +299,7 @@
     <div class="primary-label">Primary Sources</div>
 
     @php
-    $visibleSources = $check->sources->filter(fn($s) => $s->matched_words > 0);
+    $visibleSources = $check->sources->filter(fn($s) => $s->matched_words < 1000 && $s->matched_words > 0);
         @endphp
 
         @if($visibleSources->isEmpty())
@@ -375,7 +352,7 @@
                     </td>
                     <td class="source-stats-cell">
                         <span class="source-words"
-                            style="font-size: 13px; color: #4b5563; font-weight: normal; margin-right: 4px;">{{ $source->matched_words >= 1000 ? '100+' : $source->matched_words }}
+                            style="font-size: 13px; color: #4b5563; font-weight: normal; margin-right: 4px;">{{ $source->matched_words }}
                             words &mdash;</span>
                         <span class="source-percent">{{ $source->turnitin_percentage }}</span>
                     </td>
@@ -383,6 +360,34 @@
                 @endforeach
             </tbody>
         </table>
+        @endif
+
+        @php
+        $reportHighlights = $check->highlights
+            ->filter(fn($highlight) => trim((string) $highlight->original_text) !== '')
+            ->take(100);
+        @endphp
+        @if($reportHighlights->isNotEmpty())
+        <div class="highlight-list">
+            <div class="primary-label">Teks Terdeteksi</div>
+            @foreach($reportHighlights as $highlight)
+            @php
+            $highlightSource = $highlight->source?->source_label ?? 'Sumber';
+            $highlightColor = $highlight->color_code ?? $highlight->source?->color_code ?? '#f59e0b';
+            @endphp
+            <div class="highlight-item" style="border-left-color: {{ $highlightColor }}; background-color: #fff3a3;">
+                <div class="highlight-source">{{ $highlightSource }} - {{ $highlight->match_percentage }}% match</div>
+                {{ trim($highlight->original_text) }}
+            </div>
+            @endforeach
+        </div>
+        @endif
+
+        @if(!empty(trim($highlightedText ?? '')))
+        <div class="highlighted-document">
+            <div class="primary-label">Naskah dengan Stabilo</div>
+            {!! $highlightedText !!}
+        </div>
         @endif
 
         <div class="footer"
