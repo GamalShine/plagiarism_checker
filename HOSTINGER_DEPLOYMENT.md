@@ -73,3 +73,23 @@ Confirm that `https://slategray-penguin-737813.hostingersite.com/storage/...` ca
 ## 6. Server limitations
 
 PDF/DOCX conversion features that require Python or Microsoft Word may not work on shared Linux hosting. Keep `WORD_COM_ENABLED=false` unless the required server tools are actually installed. Test document upload, queue completion, payment callback, and PDF export after deployment.
+
+## 7. PDF export on shared hosting
+
+The PDF export has a PHP-only fallback and does not require Node.js when the uploaded document is already a PDF with a text layer. Use these production settings:
+
+```env
+PDF_LIGHTWEIGHT=false
+PDF_EXPORT_CACHE=true
+NODE_PATH=
+WORD_COM_ENABLED=false
+```
+
+After deployment, clear the Laravel runtime cache:
+
+```bash
+php artisan optimize:clear
+php artisan storage:link
+```
+
+If the uploaded file is DOCX, PHP must be able to convert it to PDF. Shared hosting without LibreOffice, Microsoft Word, or another DOCX converter cannot preserve the original Word layout. In that case, upload a PDF source or install a server-side DOCX converter.
