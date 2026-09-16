@@ -79,7 +79,7 @@ PDF/DOCX conversion features that require Python or Microsoft Word may not work 
 The PDF export has a PHP-only fallback and does not require Node.js when the uploaded document is already a PDF with a text layer. Use these production settings:
 
 ```env
-PDF_LIGHTWEIGHT=false
+PDF_LIGHTWEIGHT=true
 PDF_EXPORT_CACHE=true
 NODE_PATH=
 WORD_COM_ENABLED=false

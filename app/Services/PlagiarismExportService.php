@@ -26,6 +26,15 @@ class PlagiarismExportService
         @ini_set('memory_limit', '1024M');
         @set_time_limit(0);
 
+        if (filter_var(env('PDF_LIGHTWEIGHT', false), FILTER_VALIDATE_BOOL)) {
+            return $this->renderCoverAndReportPdf(
+                $check,
+                $this->buildLightweightHighlightedText($check),
+                $downloadName,
+                $includeAllSources,
+            );
+        }
+
         $tempDir = storage_path('app/temp/exports/' . $check->id . '_' . time());
         File::ensureDirectoryExists($tempDir);
 
