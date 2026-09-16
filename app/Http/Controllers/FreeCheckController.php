@@ -6,6 +6,7 @@ use App\Models\Document;
 use App\Models\Payment;
 use App\Models\PlagiarismCheck;
 use App\Models\User;
+use App\Jobs\ProcessPlagiarismCheck;
 use App\Services\PageContentFetcher;
 use App\Services\PlagiarismExportService;
 use App\Services\PlagiarismService;
@@ -146,11 +147,6 @@ class FreeCheckController extends Controller
             $selectedSources = $defaultSources;
         }
 
-        // Get settings dari authenticated user (jika ada), atau dari system user (jika guest)
-        // Ensure loaded fresh para tidak cached/NULL
-        $settings = $authenticatedUser?->load('settings')->settings 
-            ?? $systemUser->load('settings')->settings;
-
         $title = 'Cek Gratis - ' . Str::limit(strip_tags($rawText), 35);
 
         // Document owner: authenticated user (jika ada), atau system user (jika guest)
@@ -173,60 +169,65 @@ class FreeCheckController extends Controller
             'sources_checked' => $selectedSources,
         ]);
 
-        // Jalankan pengecekan langsung (Synchronous)
-        // Pass settings supaya bisa gunakan API keys (SerpAPI, Elsevier, dll) - SAMA seperti user/admin check
-        $check = $this->plagiarismService->check($document, $selectedSources, $settings, $check);
-        $check->load(['sources' => fn($q) => $q->orderBy('similarity_score', 'desc'), 'highlights.source']);
-
-        $score = (float) $check->total_similarity;
-        $statusText = 'Aman / Original';
-        if ($score > 24 && $score <= 49) {
-            $statusText = 'Kemiripan Sedang';
-        } elseif ($score > 49 && $score <= 74) {
-            $statusText = 'Kemiripan Tinggi';
-        } elseif ($score > 74) {
-            $statusText = 'Indikasi Plagiat Kuat';
-        }
-
-        $sourceIndexMap = [];
-        $idx = 1;
-        foreach ($check->sources as $s) {
-            $sourceIndexMap[$s->id] = $idx++;
-        }
-
-        $visibleSources = $check->sources->filter(fn($s) => $s->matched_words < 1000 && $s->matched_words > 0)->values();
-
-        $sourcesData = $visibleSources->map(function ($src) use ($sourceIndexMap) {
-            return [
-                'index' => $sourceIndexMap[$src->id] ?? '*',
-                'color' => $src->color_code ?? '#ff0000',
-                'title' => $src->title ?: $src->source_label,
-                'source_label' => $src->source_label,
-                'matched_words' => $src->matched_words,
-                'percentage' => $src->turnitin_percentage,
-            ];
-        });
-
-        $highlightsData = $check->highlights->map(function ($h) use ($sourceIndexMap) {
-            return [
-                'index' => $sourceIndexMap[$h->plagiarism_source_id] ?? '*',
-                'color' => $h->source->color_code ?? '#ff0000',
-                'source_label' => $h->source->source_label ?? 'Sumber',
-                'match_percentage' => $h->match_percentage,
-                'original_text' => $h->original_text,
-            ];
-        });
+        ProcessPlagiarismCheck::dispatch($check->id);
 
         return response()->json([
             'success' => true,
             'data' => [
-                'total_similarity' => $score,
-                'status_label' => $statusText,
-                'highlights_count' => count($check->highlights),
-                'sources_count' => $check->sources->count(),
+                'status' => 'processing',
+                'check_id' => $check->id,
                 'total_words' => $wordCount,
-                'sources' => $sourcesData,
-                'highlights' => $highlightsData,
+            ],
+        ], 202);
+    }
+
+    public function status(PlagiarismCheck $plagiarismCheck)
+    {
+        if ($plagiarismCheck->document?->user_id !== (auth()->id() ?? $plagiarismCheck->user_id)) {
+            abort(404);
+        }
+
+        $check = $plagiarismCheck->load(['sources' => fn ($query) => $query->orderBy('similarity_score', 'desc'), 'highlights.source']);
+        if ($check->status !== 'completed') {
+            return response()->json([
+                'success' => true,
+                'data' => ['status' => $check->status, 'error_message' => $check->error_message],
+            ]);
+        }
+
+        $sourceIndexMap = [];
+        foreach ($check->sources as $index => $source) {
+            $sourceIndexMap[$source->id] = $index + 1;
+        }
+
+        $sources = $check->sources->filter(fn ($source) => $source->matched_words < 1000 && $source->matched_words > 0)->values()->map(fn ($source) => [
+            'index' => $sourceIndexMap[$source->id] ?? '*',
+            'color' => $source->color_code ?? '#ff0000',
+            'title' => $source->title ?: $source->source_label,
+            'source_label' => $source->source_label,
+            'matched_words' => $source->matched_words,
+            'percentage' => $source->turnitin_percentage,
+        ]);
+
+        $highlights = $check->highlights->map(fn ($highlight) => [
+            'index' => $sourceIndexMap[$highlight->plagiarism_source_id] ?? '*',
+            'color' => $highlight->color_code ?? $highlight->source?->color_code ?? '#ff0000',
+            'source_label' => $highlight->source?->source_label ?? 'Sumber',
+            'match_percentage' => $highlight->match_percentage,
+            'original_text' => $highlight->original_text,
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'status' => 'completed',
+                'total_similarity' => (float) $check->total_similarity,
+                'status_label' => $check->similarity_label,
+                'highlights_count' => $check->highlights->count(),
+                'sources_count' => $check->sources->count(),
+                'total_words' => $check->total_words,
+                'sources' => $sources,
+                'highlights' => $highlights,
                 'export_url' => route('free.check.export', $check),
             ],
         ]);

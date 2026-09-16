@@ -13,21 +13,31 @@
             <span class="text-[17px] font-extrabold tracking-[-0.02em] text-slate-950">NaskahCek</span>
         </a>
         <div class="hidden items-center gap-1 md:flex">
-            <a href="{{ route('free.check.index') }}" class="rounded-lg bg-blue-50 px-3.5 py-2 text-[13px] font-semibold text-blue-600">Cek Plagiasi Turnitin</a>
-            <a href="{{ route('pricing') }}" class="rounded-lg px-3.5 py-2 text-[13px] font-semibold text-slate-600 hover:bg-slate-50">Paket Harga</a>
-            <a href="{{ route('templates.index') }}" class="rounded-lg px-3.5 py-2 text-[13px] font-semibold text-slate-600 hover:bg-slate-50">Template Jurnal</a>
-            <a href="{{ route('welcome') }}#faq" class="rounded-lg px-3.5 py-2 text-[13px] font-semibold text-slate-600 hover:bg-slate-50">Bantuan</a>
+            <a href="{{ route('free.check.index') }}"
+                class="rounded-lg bg-blue-50 px-3.5 py-2 text-[13px] font-semibold text-blue-600">Cek Plagiasi
+                Turnitin</a>
+            <a href="{{ route('pricing') }}"
+                class="rounded-lg px-3.5 py-2 text-[13px] font-semibold text-slate-600 hover:bg-slate-50">Paket
+                Harga</a>
+            <a href="{{ route('templates.index') }}"
+                class="rounded-lg px-3.5 py-2 text-[13px] font-semibold text-slate-600 hover:bg-slate-50">Template
+                Jurnal</a>
+            <a href="{{ route('welcome') }}#faq"
+                class="rounded-lg px-3.5 py-2 text-[13px] font-semibold text-slate-600 hover:bg-slate-50">Bantuan</a>
         </div>
         <div class="hidden items-center gap-2 md:flex">
-            <a href="{{ route('login') }}" class="inline-flex items-center rounded-xl bg-blue-600 px-5 py-2.5 text-[13px] font-bold text-white transition hover:bg-blue-700">Masuk</a>
+            <a href="{{ route('login') }}"
+                class="inline-flex items-center rounded-xl bg-blue-600 px-5 py-2.5 text-[13px] font-bold text-white transition hover:bg-blue-700">Masuk</a>
         </div>
         <button type="button" id="mobile-menu-toggle"
             class="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 text-slate-700 transition hover:bg-slate-50 md:hidden"
             aria-controls="mobile-menu" aria-expanded="false" aria-label="Buka menu navigasi">
-            <svg id="mobile-menu-open-icon" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+            <svg id="mobile-menu-open-icon" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"
+                aria-hidden="true">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
             </svg>
-            <svg id="mobile-menu-close-icon" class="hidden h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+            <svg id="mobile-menu-close-icon" class="hidden h-5 w-5" fill="none" viewBox="0 0 24 24"
+                stroke="currentColor" aria-hidden="true">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 6l12 12M6 18L18 6" />
             </svg>
         </button>
@@ -53,7 +63,8 @@
     </div>
 </nav>
 @endif
-<div x-data="plagiarismChecker()" class="{{ ($publicMode ?? false) ? 'relative z-10 mx-auto w-full max-w-[1080px] space-y-5 px-5 pb-6 pt-[80px] sm:space-y-6 sm:px-6 sm:pt-[88px] lg:px-8' : '' }}">
+<div x-data="plagiarismChecker()"
+    class="{{ ($publicMode ?? false) ? 'relative z-10 mx-auto w-full max-w-[1080px] space-y-5 px-5 pb-6 pt-[80px] sm:space-y-6 sm:px-6 sm:pt-[88px] lg:px-8' : '' }}">
     <div x-show="isProcessingPayment" x-cloak class="mb-6 pc-card p-6 sm:p-8">
         <div class="flex items-center gap-4">
             <div
@@ -66,8 +77,11 @@
                 </svg>
             </div>
             <div>
-                <h2 class="text-lg font-bold" x-text="guestToken ? 'Menunggu Pembayaran' : 'Memproses pengecekan plagiarisme'"></h2>
-                <p class="text-sm mt-1" style="color: var(--pc-text-muted);" x-text="guestToken ? 'Pengecekan akan dimulai setelah pembayaran dikonfirmasi' : paymentStatusText"></p>
+                <h2 class="text-lg font-bold"
+                    x-text="guestToken ? 'Menunggu Pembayaran' : 'Memproses pengecekan plagiarisme'"></h2>
+                <p class="text-sm mt-1" style="color: var(--pc-text-muted);"
+                    x-text="guestToken ? 'Pengecekan akan dimulai setelah pembayaran dikonfirmasi' : paymentStatusText">
+                </p>
                 <div class="mt-3 h-2 w-full max-w-md overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
                     <div class="h-full rounded-full bg-indigo-600 transition-all duration-500"
                         :style="`width: ${progress}%`"></div>
@@ -78,20 +92,23 @@
     </div>
 
     <div class="pc-card p-6 sm:p-8 relative overflow-hidden">
-        <form action="{{ ($publicMode ?? false) ? (auth()->check() ? route('user.plagiarism.pay') : route('free.plagiarism.check')) : (auth()->user()->isMember() ? route($routePrefix.'.plagiarism.check') : route($routePrefix.'.plagiarism.pay')) }}" method="POST" enctype="multipart/form-data"
-            @submit="isChecking = true">
+        <form
+            action="{{ ($publicMode ?? false) ? (auth()->check() ? route('user.plagiarism.pay') : route('free.plagiarism.check')) : (auth()->user()->isMember() ? route($routePrefix.'.plagiarism.check') : route($routePrefix.'.plagiarism.pay')) }}"
+            method="POST" enctype="multipart/form-data" @submit="isChecking = true">
             @csrf
 
             @if($publicMode ?? false)
             <div class="mb-8 grid gap-4 sm:grid-cols-2">
                 <div>
                     <label class="pc-label" for="guest-name">Nama</label>
-                    <input id="guest-name" name="name" type="text" required maxlength="120" class="pc-input w-full" value="{{ old('name') }}">
+                    <input id="guest-name" name="name" type="text" required maxlength="120" class="pc-input w-full"
+                        value="{{ old('name') }}">
                     @error('name') <p class="mt-1 text-xs text-red-500">{{ $message }}</p> @enderror
                 </div>
                 <div>
                     <label class="pc-label" for="guest-email">Email untuk pembayaran</label>
-                    <input id="guest-email" name="email" type="email" required maxlength="190" class="pc-input w-full" value="{{ old('email') }}">
+                    <input id="guest-email" name="email" type="email" required maxlength="190" class="pc-input w-full"
+                        value="{{ old('email') }}">
                     @error('email') <p class="mt-1 text-xs text-red-500">{{ $message }}</p> @enderror
                 </div>
             </div>
@@ -233,14 +250,17 @@
                         <div>
                             <div class="flex items-center gap-2">
                                 <span
-                                    class="text-xs font-bold text-slate-900 dark:text-slate-100 uppercase tracking-wider">Proses Pengecekan Plagiarisme</span>
+                                    class="text-xs font-bold text-slate-900 dark:text-slate-100 uppercase tracking-wider">Proses
+                                    Pengecekan Plagiarisme</span>
                                 <span
-                                    class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800" x-text="guestToken ? 'Sedang Berjalan' : 'Siap Dimulai'">
+                                    class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800"
+                                    x-text="guestToken ? 'Sedang Berjalan' : 'Siap Dimulai'">
                                     Siap Dimulai
                                 </span>
                             </div>
                             <p class="hidden text-xs text-slate-500 dark:text-slate-400 mt-0.5 sm:block">
-                                Dokumen akan dianalisis, dibandingkan dengan sumber referensi, dan disusun menjadi laporan hasil pengecekan.
+                                Dokumen akan dianalisis, dibandingkan dengan sumber referensi, dan disusun menjadi
+                                laporan hasil pengecekan.
                             </p>
                         </div>
                     </div>
@@ -296,47 +316,105 @@
 
     @if($publicMode ?? false)
     <section x-show="guestResultReady" x-cloak class="grid grid-cols-1 gap-4 lg:grid-cols-12" aria-live="polite">
-        <div class="lg:col-span-8 flex h-full flex-col rounded-2xl border border-slate-200/80 bg-white p-5 shadow-lg dark:border-slate-700/80 dark:bg-slate-800">
+        <div
+            class="lg:col-span-8 flex h-full flex-col rounded-2xl border border-slate-200/80 bg-white p-5 shadow-lg dark:border-slate-700/80 dark:bg-slate-800">
             <div class="mb-4 flex items-center justify-between border-b border-slate-100 pb-3 dark:border-slate-700/60">
-                <div><p class="text-xs font-bold uppercase tracking-wider text-indigo-600">Hasil Pengecekan</p><h2 class="mt-1 text-lg font-black text-slate-900 dark:text-white">Ringkasan Dokumen</h2></div>
-                <span class="rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-bold text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300">Selesai</span>
+                <div>
+                    <p class="text-xs font-bold uppercase tracking-wider text-indigo-600">Hasil Pengecekan</p>
+                    <h2 class="mt-1 text-lg font-black text-slate-900 dark:text-white">Ringkasan Dokumen</h2>
+                </div>
+                <span
+                    class="rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-bold text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300">Selesai</span>
             </div>
             <div class="grid grid-cols-2 gap-3.5">
-                <div class="relative rounded-xl border border-slate-100 bg-slate-50/80 p-4 text-center dark:border-slate-700/70 dark:bg-slate-800/80">
-                    <span class="block text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Overall Similarity</span>
-                    <div class="mt-1 text-4xl font-black" :style="`color: ${similarityColor(guestResult.similarity)}`"><span x-text="guestResult.similarity"></span><span class="text-lg">%</span></div>
-                    <span class="mt-2 inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[10px] font-bold" :style="`background-color: ${similarityColor(guestResult.similarity)}15; color: ${similarityColor(guestResult.similarity)}`"><span class="h-1.5 w-1.5 rounded-full" :style="`background-color: ${similarityColor(guestResult.similarity)}`"></span><span x-text="similarityLabel(guestResult.similarity)"></span></span>
+                <div
+                    class="relative rounded-xl border border-slate-100 bg-slate-50/80 p-4 text-center dark:border-slate-700/70 dark:bg-slate-800/80">
+                    <span class="block text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Overall
+                        Similarity</span>
+                    <div class="mt-1 text-4xl font-black" :style="`color: ${similarityColor(guestResult.similarity)}`">
+                        <span x-text="guestResult.similarity"></span><span class="text-lg">%</span></div>
+                    <span class="mt-2 inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[10px] font-bold"
+                        :style="`background-color: ${similarityColor(guestResult.similarity)}15; color: ${similarityColor(guestResult.similarity)}`"><span
+                            class="h-1.5 w-1.5 rounded-full"
+                            :style="`background-color: ${similarityColor(guestResult.similarity)}`"></span><span
+                            x-text="similarityLabel(guestResult.similarity)"></span></span>
                 </div>
-                <div class="rounded-xl border border-slate-100 bg-slate-50/80 p-4 text-center dark:border-slate-700/70 dark:bg-slate-800/80">
-                    <span class="block text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Original Text</span>
-                    <div class="mt-1 text-4xl font-black text-slate-800 dark:text-slate-100"><span x-text="originalTextScore()"></span><span class="text-lg">%</span></div>
-                    <span class="mt-2 inline-flex rounded-full bg-emerald-50 px-2.5 py-0.5 text-[10px] font-semibold text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400">Tingkat Originalitas</span>
+                <div
+                    class="rounded-xl border border-slate-100 bg-slate-50/80 p-4 text-center dark:border-slate-700/70 dark:bg-slate-800/80">
+                    <span class="block text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Original
+                        Text</span>
+                    <div class="mt-1 text-4xl font-black text-slate-800 dark:text-slate-100"><span
+                            x-text="originalTextScore()"></span><span class="text-lg">%</span></div>
+                    <span
+                        class="mt-2 inline-flex rounded-full bg-emerald-50 px-2.5 py-0.5 text-[10px] font-semibold text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400">Tingkat
+                        Originalitas</span>
                 </div>
             </div>
             <div class="mt-auto flex justify-end pt-5">
-                <a href="#" @click.prevent="downloadGuestPdf" class="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-indigo-700">
-                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                <a href="#" @click.prevent="downloadGuestPdf"
+                    class="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-indigo-700">
+                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
                     Download PDF
                 </a>
             </div>
         </div>
         <div class="lg:col-span-4 flex h-full flex-col gap-3">
-            <div class="h-full min-h-0 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-lg dark:border-slate-700/80 dark:bg-slate-800">
-                <div class="mb-3 flex items-center gap-2 border-b border-slate-100 pb-3 dark:border-slate-700/60"><span class="h-4 w-2 rounded-full bg-indigo-600"></span><h3 class="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200">Primary Sources</h3></div>
-            <div class="max-h-64 space-y-2 overflow-y-auto">
-                <template x-for="(source, index) in guestResult.sources" :key="source.url + source.title">
-                    <div class="flex items-start gap-3 rounded-xl border border-slate-200/70 p-2 dark:border-slate-700/70"><span class="flex h-5 w-5 shrink-0 items-center justify-center rounded-md text-[10px] font-bold text-white" :style="`background-color: ${source.color_code}`" x-text="index + 1"></span><div class="min-w-0 flex-1"><a class="block truncate text-xs font-semibold text-slate-800 hover:text-indigo-600 dark:text-slate-200" :href="source.url !== '#' ? source.url : null" target="_blank" rel="noopener" x-text="source.title || source.source_label"></a><div class="mt-1 flex items-center gap-2 text-[10px] text-slate-400"><span class="truncate" x-text="source.source_label"></span><span>&bull;</span><span class="shrink-0 font-semibold text-slate-600 dark:text-slate-300" x-text="source.matched_words + ' words'"></span><span>&bull;</span><strong class="shrink-0 text-indigo-600" x-text="source.percentage"></strong></div></div></div>
-                </template>
-                <p x-show="guestResult.hidden_sources_count > 0" class="pt-2 text-center text-xs italic text-slate-400" x-text="'dan ' + guestResult.hidden_sources_count + ' sumber lainnya'"></p>
-                <p x-show="guestResult.sources.length === 0" class="py-4 text-center text-xs italic text-slate-400">Tidak ditemukan sumber kemiripan</p>
+            <div
+                class="h-full min-h-0 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-lg dark:border-slate-700/80 dark:bg-slate-800">
+                <div class="mb-3 flex items-center gap-2 border-b border-slate-100 pb-3 dark:border-slate-700/60"><span
+                        class="h-4 w-2 rounded-full bg-indigo-600"></span>
+                    <h3 class="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200">Primary
+                        Sources</h3>
+                </div>
+                <div class="max-h-64 space-y-2 overflow-y-auto">
+                    <template x-for="(source, index) in guestResult.sources" :key="source.url + source.title">
+                        <div
+                            class="flex items-start gap-3 rounded-xl border border-slate-200/70 p-2 dark:border-slate-700/70">
+                            <span
+                                class="flex h-5 w-5 shrink-0 items-center justify-center rounded-md text-[10px] font-bold text-white"
+                                :style="`background-color: ${source.color_code}`" x-text="index + 1"></span>
+                            <div class="min-w-0 flex-1"><a
+                                    class="block truncate text-xs font-semibold text-slate-800 hover:text-indigo-600 dark:text-slate-200"
+                                    :href="source.url !== '#' ? source.url : null" target="_blank" rel="noopener"
+                                    x-text="source.title || source.source_label"></a>
+                                <div class="mt-1 flex items-center gap-2 text-[10px] text-slate-400"><span
+                                        class="truncate" x-text="source.source_label"></span><span>&bull;</span><span
+                                        class="shrink-0 font-semibold text-slate-600 dark:text-slate-300"
+                                        x-text="source.matched_words + ' words'"></span><span>&bull;</span><strong
+                                        class="shrink-0 text-indigo-600" x-text="source.percentage"></strong></div>
+                            </div>
+                        </div>
+                    </template>
+                    <p x-show="guestResult.hidden_sources_count > 0"
+                        class="pt-2 text-center text-xs italic text-slate-400"
+                        x-text="'dan ' + guestResult.hidden_sources_count + ' sumber lainnya'"></p>
+                    <p x-show="guestResult.sources.length === 0" class="py-4 text-center text-xs italic text-slate-400">
+                        Tidak ditemukan sumber kemiripan</p>
+                </div>
             </div>
         </div>
-        </div>
         <div x-show="false" class="hidden">
-            <div class="mb-3 flex items-center gap-2 border-b border-slate-100 pb-3 dark:border-slate-700/60"><span class="h-4 w-2 rounded-full bg-rose-500"></span><h3 class="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200">Frase Terdeteksi</h3><span class="text-[11px] text-slate-400" x-text="guestResult.highlights.length + ' frase'"></span></div>
+            <div class="mb-3 flex items-center gap-2 border-b border-slate-100 pb-3 dark:border-slate-700/60"><span
+                    class="h-4 w-2 rounded-full bg-rose-500"></span>
+                <h3 class="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200">Frase
+                    Terdeteksi</h3><span class="text-[11px] text-slate-400"
+                    x-text="guestResult.highlights.length + ' frase'"></span>
+            </div>
             <div class="grid gap-2 md:grid-cols-2">
-                <template x-for="highlight in guestResult.highlights.slice(0, 20)" :key="highlight.text + highlight.percentage">
-                    <div class="rounded-xl border border-slate-200/70 p-2.5 dark:border-slate-700/70"><div class="mb-1 flex items-center justify-between gap-2"><span class="truncate text-[10px] font-semibold text-slate-500" x-text="highlight.source_label"></span><span class="rounded bg-slate-100 px-1.5 py-0.5 text-[9px] font-bold text-slate-600" x-text="highlight.percentage + '% match'"></span></div><p class="line-clamp-2 border-l-2 border-slate-200 pl-1 text-[11px] italic text-slate-600 dark:border-slate-700 dark:text-slate-300" x-text="'&quot;' + highlight.text + '&quot;'"></p></div>
+                <template x-for="highlight in guestResult.highlights.slice(0, 20)"
+                    :key="highlight.text + highlight.percentage">
+                    <div class="rounded-xl border border-slate-200/70 p-2.5 dark:border-slate-700/70">
+                        <div class="mb-1 flex items-center justify-between gap-2"><span
+                                class="truncate text-[10px] font-semibold text-slate-500"
+                                x-text="highlight.source_label"></span><span
+                                class="rounded bg-slate-100 px-1.5 py-0.5 text-[9px] font-bold text-slate-600"
+                                x-text="highlight.percentage + '% match'"></span></div>
+                        <p class="line-clamp-2 border-l-2 border-slate-200 pl-1 text-[11px] italic text-slate-600 dark:border-slate-700 dark:text-slate-300"
+                            x-text="'&quot;' + highlight.text + '&quot;'"></p>
+                    </div>
                 </template>
             </div>
         </div>
@@ -352,11 +430,11 @@
         height: 62px;
     }
 
-    nav > div {
+    nav>div {
         height: 62px !important;
     }
 
-    nav > #mobile-menu {
+    nav>#mobile-menu {
         height: auto !important;
     }
 }
@@ -409,7 +487,9 @@ function plagiarismChecker() {
         detectedChapters: [],
         isDetectingChapters: false,
         selectAllChapters: false,
-        sources: @js(data_get($settings, 'default_sources') ?: ['web', 'google_scholar', 'elsevier', 'openalex', 'crossref', 'crossref_posted', 'publications']),
+        sources: @js(data_get($settings, 'default_sources') ?: ['web', 'google_scholar', 'elsevier', 'openalex',
+            'crossref', 'crossref_posted', 'publications'
+        ]),
         selectAll: false,
         isChecking: false,
         isProcessingPayment: false,
@@ -417,7 +497,16 @@ function plagiarismChecker() {
         guestToken: @js($guestToken ?? null),
         guestPaymentBase: @js(rtrim(request()->getBaseUrl(), '/')),
         guestResultReady: false,
-        guestResult: { similarity: 0, total_sentences: 0, matched_sentences: 0, sources: [], highlights: [], highlights_count: 0, hidden_sources_count: 0, export_url: '' },
+        guestResult: {
+            similarity: 0,
+            total_sentences: 0,
+            matched_sentences: 0,
+            sources: [],
+            highlights: [],
+            highlights_count: 0,
+            hidden_sources_count: 0,
+            export_url: ''
+        },
         paymentStatusText: 'Menunggu konfirmasi pembayaran...',
         progress: 0,
         progressTimer: null,
@@ -508,7 +597,12 @@ function plagiarismChecker() {
 
         async pollGuestStatus() {
             try {
-                const response = await fetch(`${this.guestPaymentBase}/guest-payment/${encodeURIComponent(this.guestToken)}/status`, { headers: { Accept: 'application/json' } });
+                const response = await fetch(
+                    `${this.guestPaymentBase}/guest-payment/${encodeURIComponent(this.guestToken)}/status`, {
+                        headers: {
+                            Accept: 'application/json'
+                        }
+                    });
                 if (!response.ok) return;
                 const data = await response.json();
                 if (data.status === 'failed' || data.plagiarism_status === 'failed') {
@@ -527,9 +621,9 @@ function plagiarismChecker() {
                     this.isProcessingPayment = false;
                     return;
                 }
-                this.paymentStatusText = data.status === 'paid'
-                    ? 'Pembayaran diterima. Sistem sedang menganalisis dokumen...'
-                    : 'Menunggu konfirmasi pembayaran...';
+                this.paymentStatusText = data.status === 'paid' ?
+                    'Pembayaran diterima. Sistem sedang menganalisis dokumen...' :
+                    'Menunggu konfirmasi pembayaran...';
             } catch (error) {
                 this.paymentStatusText = 'Menghubungkan ke status pembayaran...';
             }

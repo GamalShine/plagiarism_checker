@@ -58,17 +58,21 @@ class ProcessPlagiarismCheck implements ShouldQueue
         ]);
 
         $document = $check->document;
-        $filePath = Storage::disk('public')->path($document->file_path);
+        $filePath = $document->file_path
+            ? Storage::disk('public')->path($document->file_path)
+            : '';
 
-        $sourcePdf = $documentPageRenderer->resolveSourcePdf($filePath, $document->id);
-        if (strtolower(pathinfo($filePath, PATHINFO_EXTENSION)) === 'docx' && ! $sourcePdf) {
+        $sourcePdf = $filePath ? $documentPageRenderer->resolveSourcePdf($filePath, $document->id) : null;
+        if ($filePath && strtolower(pathinfo($filePath, PATHINFO_EXTENSION)) === 'docx' && ! $sourcePdf) {
             Log::warning('Source DOCX could not be converted to PDF during plagiarism processing', [
                 'check_id' => $check->id,
                 'document_id' => $document->id,
             ]);
         }
 
-        $content = $plagiarismService->extractTextFromFile($filePath, $document->mime_type ?? '', $selectedChapters);
+        $content = $filePath
+            ? $plagiarismService->extractTextFromFile($filePath, $document->mime_type ?? '', $selectedChapters)
+            : (string) $document->content;
 
         Log::info('Plagiarism section filter completed', [
             'check_id' => $check->id,

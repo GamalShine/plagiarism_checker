@@ -19,6 +19,7 @@ Route::get('/guest-payment/{token}/result', [PaymentController::class, 'guestRes
 Route::get('/guest-payment/{token}/export', [PaymentController::class, 'guestExport'])->name('guest.payment.export');
 Route::get('/guest-payment/{token}/error', [PaymentController::class, 'guestError'])->name('guest.payment.error');
 Route::post('/cekplagiasiturnitin/check', [FreeCheckController::class, 'check'])->name('free.check.process');
+Route::get('/cekplagiasiturnitin/status/{plagiarismCheck}', [FreeCheckController::class, 'status'])->name('free.check.status');
 Route::get('/cekplagiasiturnitin/export/{plagiarismCheck}', [FreeCheckController::class, 'export'])->name('free.check.export');
 Route::post('/cekplagiasiturnitin/fetch-url', [FreeCheckController::class, 'fetchUrl'])->name('free.check.fetch_url');
 

@@ -831,6 +831,23 @@ function freePlagiarismApp() {
             this.wordCount = words.length;
         },
 
+        async pollCheckStatus(checkId) {
+            const statusUrl = '{{ url('/cekplagiasiturnitin/status') }}/' + checkId;
+            for (;;) {
+                await new Promise(resolve => setTimeout(resolve, 2000));
+                const response = await fetch(statusUrl, { headers: { 'Accept': 'application/json' } });
+                const payload = await response.json();
+                if (!response.ok || !payload.success) throw new Error(payload.message || 'Pemeriksaan gagal.');
+                if (payload.data.status === 'completed') {
+                    this.result = payload.data;
+                    return;
+                }
+                if (payload.data.status === 'failed') {
+                    throw new Error(payload.data.error_message || 'Pemeriksaan gagal.');
+                }
+            }
+        },
+
         async startCheck() {
             this.updateWordCount();
             if (this.wordCount === 0 || this.wordCount > 5000) {
@@ -856,7 +873,7 @@ function freePlagiarismApp() {
                 const data = await response.json();
 
                 if (response.ok && data.success) {
-                    this.result = data.data;
+                    await this.pollCheckStatus(data.data.check_id);
                 } else {
                     Swal.fire({
                         icon: 'error',
@@ -865,6 +882,7 @@ function freePlagiarismApp() {
                         confirmButtonColor: '#2563eb',
                     });
                 }
+
             } catch (error) {
                 console.error(error);
                 Swal.fire({
