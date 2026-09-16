@@ -93,4 +93,4 @@ php artisan optimize:clear
 php artisan storage:link
 ```
 
-If the uploaded file is DOCX, PHP must be able to convert it to PDF. Shared hosting without LibreOffice, Microsoft Word, or another DOCX converter cannot preserve the original Word layout. In that case, upload a PDF source or install a server-side DOCX converter.
+DOCX conversion is attempted once by the `plagiarism` queue job and cached under `storage/app`. The queue cron must run successfully after upload, otherwise the source PDF will not be ready for export. For a PDF upload with a text layer, the export contains the cover, the highlighted source PDF, and the report. If Hostinger cannot convert a DOCX to PDF, the export falls back to highlighted extracted text and cannot preserve the original Word page layout. For exact Word layout and page-level highlighting, use a server-side DOCX converter or upload a PDF source.

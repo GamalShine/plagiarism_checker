@@ -58,6 +58,21 @@ class DocumentPageRenderer
         return is_file($cachedPdf) ? $cachedPdf : $pdfPath;
     }
 
+    public function cachedSourcePdf(string $filePath, int $documentId): ?string
+    {
+        if (! is_file($filePath)) {
+            return null;
+        }
+
+        if (strtolower(pathinfo($filePath, PATHINFO_EXTENSION)) === 'pdf') {
+            return $filePath;
+        }
+
+        $cachedPdf = $this->cacheDirectory($documentId, $filePath) . DIRECTORY_SEPARATOR . 'source.pdf';
+
+        return is_file($cachedPdf) && filesize($cachedPdf) > 0 ? $cachedPdf : null;
+    }
+
     public function resolveSourcePdfWithoutShell(string $filePath, int $documentId, array $highlights = []): ?string
     {
         if (! is_file($filePath)) {
@@ -74,7 +89,12 @@ class DocumentPageRenderer
         }
 
         $cacheDir = $this->cacheDirectory($documentId, $filePath);
+        $convertedPdf = $cacheDir . DIRECTORY_SEPARATOR . 'source.pdf';
         $cachedPdf = $cacheDir . DIRECTORY_SEPARATOR . 'phpword-source.pdf';
+
+        if (is_file($convertedPdf) && filesize($convertedPdf) > 0) {
+            return $convertedPdf;
+        }
 
         if (is_file($cachedPdf) && filesize($cachedPdf) > 0) {
             return $cachedPdf;
@@ -101,38 +121,6 @@ class DocumentPageRenderer
         }
 
         $pdfPath ??= $this->convertDocxWithPhpWord($filePath, $cacheDir);
-
-        if ($pdfPath && $pdfPath !== $cachedPdf && is_file($pdfPath)) {
-            @copy($pdfPath, $cachedPdf);
-        }
-
-        return is_file($cachedPdf) && filesize($cachedPdf) > 0 ? $cachedPdf : null;
-    }
-
-    public function resolveSourcePdfWithPhpWord(string $filePath, int $documentId): ?string
-    {
-        if (! is_file($filePath)) {
-            return null;
-        }
-
-        $extension = strtolower(pathinfo($filePath, PATHINFO_EXTENSION));
-        if ($extension === 'pdf') {
-            return $filePath;
-        }
-
-        if ($extension !== 'docx') {
-            return null;
-        }
-
-        $cacheDir = $this->cacheDirectory($documentId, $filePath);
-        $cachedPdf = $cacheDir . DIRECTORY_SEPARATOR . 'phpword-source.pdf';
-
-        if (is_file($cachedPdf) && filesize($cachedPdf) > 0) {
-            return $cachedPdf;
-        }
-
-        File::ensureDirectoryExists($cacheDir);
-        $pdfPath = $this->convertDocxWithPhpWord($filePath, $cacheDir);
 
         if ($pdfPath && $pdfPath !== $cachedPdf && is_file($pdfPath)) {
             @copy($pdfPath, $cachedPdf);

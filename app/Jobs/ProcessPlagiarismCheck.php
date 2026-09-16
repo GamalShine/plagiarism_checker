@@ -5,6 +5,8 @@ namespace App\Jobs;
 use App\Models\PlagiarismCheck;
 use App\Models\History;
 use App\Services\HistoryService;
+use App\Services\DocumentPageRenderer;
+use App\Services\PlagiarismExportService;
 use App\Services\PlagiarismService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -25,7 +27,12 @@ class ProcessPlagiarismCheck implements ShouldQueue
         $this->onQueue('plagiarism');
     }
 
-    public function handle(PlagiarismService $plagiarismService, HistoryService $historyService): void
+    public function handle(
+        PlagiarismService $plagiarismService,
+        HistoryService $historyService,
+        DocumentPageRenderer $documentPageRenderer,
+        PlagiarismExportService $plagiarismExportService,
+    ): void
     {
         $check = PlagiarismCheck::with(['document.user', 'document.user.settings'])->findOrFail($this->checkId);
 
@@ -52,6 +59,15 @@ class ProcessPlagiarismCheck implements ShouldQueue
 
         $document = $check->document;
         $filePath = Storage::disk('public')->path($document->file_path);
+
+        $sourcePdf = $documentPageRenderer->resolveSourcePdf($filePath, $document->id);
+        if (strtolower(pathinfo($filePath, PATHINFO_EXTENSION)) === 'docx' && ! $sourcePdf) {
+            Log::warning('Source DOCX could not be converted to PDF during plagiarism processing', [
+                'check_id' => $check->id,
+                'document_id' => $document->id,
+            ]);
+        }
+
         $content = $plagiarismService->extractTextFromFile($filePath, $document->mime_type ?? '', $selectedChapters);
 
         Log::info('Plagiarism section filter completed', [
@@ -87,6 +103,10 @@ class ProcessPlagiarismCheck implements ShouldQueue
             $settings,
             $check,
         );
+
+        if ($check->status === 'completed') {
+            $plagiarismExportService->buildHighlightedSourcePdf($check->fresh());
+        }
 
         if ($check->status === 'completed'
             && ! History::where('user_id', $check->user_id)

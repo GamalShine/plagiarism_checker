@@ -821,7 +821,7 @@ if ($score > 0 && $score <= 24) $mainColor='#16a34a' ; elseif ($score> 24 && $sc
 
                 <script>
                 document.addEventListener('DOMContentLoaded', async function() {
-                    const fileUrl = @json(($publicMode ?? false) ? asset('storage/' . $check->document->file_path) : route($routePrefix . '.plagiarism.document_docx', $check->id));
+                    const fileUrl = @json(($publicMode ?? false) ? asset('storage/' . $check->document->file_path) : route($routePrefix . '.plagiarism.document', $check->id));
                     const rawFilename = @json($check->document->original_filename ?? $check->document->file_path);
                     const fileExt = rawFilename.split('.').pop().toLowerCase();
                     const highlights = @json($highlightsList);
@@ -866,91 +866,21 @@ if ($score > 0 && $score <= 24) $mainColor='#16a34a' ; elseif ($score> 24 && $sc
                     syncContainerHeight();
                     window.addEventListener('resize', syncContainerHeight);
 
-                    // Render DOCX jika filenya adalah docx
-                    if (fileExt === 'docx' && window.docx && window.docx.renderAsync) {
-                        try {
-                            const response = await fetch(fileUrl);
-                            const blob = await response.blob();
-
-                            await window.docx.renderAsync(blob, docxTarget, null, {
-                                className: "docx",
-                                inWrapper: true,
-                                ignoreWidth: false,
-                                ignoreHeight: false,
-                                ignoreFonts: false,
-                                breakPages: true,
-                                useBase64URL: true
-                            });
-
+                    // Tampilkan PDF hasil konversi dan stabilo dari server.
+                    try {
+                        const pdfFrame = document.createElement('iframe');
+                        pdfFrame.src = fileUrl;
+                        pdfFrame.title = 'Dokumen dengan stabilo';
+                        pdfFrame.className = 'w-full rounded-lg border border-slate-300 bg-white';
+                        pdfFrame.style.height = 'min(78vh, 980px)';
+                        pdfFrame.loading = 'lazy';
+                        pdfFrame.addEventListener('load', function() {
                             if (docxLoading) docxLoading.style.display = 'none';
-
-                            // Terapkan Stabilo ke dalam dokumen Word asli menggunakan Mark.js
-                            if (window.Mark && highlights.length > 0) {
-                                const instance = new Mark(docxTarget);
-
-                                highlights.forEach(function(h) {
-                                    const cleanText = (h.original_text || '').replace(/\s+/g, ' ')
-                                        .trim();
-                                    if (cleanText.length < 5) return;
-
-                                    // Ekstrak variasi potongan frasa (30-40 karakter atau kata-kata kunci) agar tidak luput jika Word memecah tag XML
-                                    const words = cleanText.split(' ').filter(w => w.length > 2);
-                                    const searchPhrases = [cleanText];
-
-                                    if (words.length >= 4) {
-                                        searchPhrases.push(words.slice(0, 6).join(' '));
-                                        if (words.length >= 10) {
-                                            searchPhrases.push(words.slice(4, 10).join(' '));
-                                        }
-                                    }
-
-                                    searchPhrases.forEach(function(phrase) {
-                                        if (!phrase || phrase.length < 6) return;
-
-                                        instance.mark(phrase, {
-                                            element: "mark",
-                                            className: "t-highlight",
-                                            accuracy: "partially",
-                                            separateWordSearch: false,
-                                            acrossElements: true,
-                                            each: function(element) {
-                                                element.setAttribute(
-                                                    'data-source-id', h
-                                                    .source_id);
-                                                element.setAttribute(
-                                                    'data-source-index', h
-                                                    .index);
-                                                element.setAttribute(
-                                                    'data-source-color', h
-                                                    .color);
-                                                element.style.backgroundColor =
-                                                    h.color + '40';
-                                                element.style.borderBottom =
-                                                    '2px solid ' + h.color;
-
-                                                if (!element.querySelector(
-                                                        '.t-badge')) {
-                                                    const sup = document
-                                                        .createElement('sup');
-                                                    sup.className = 't-badge';
-                                                    sup.style.backgroundColor =
-                                                        h.color;
-                                                    sup.textContent = h.index;
-                                                    element.insertBefore(sup,
-                                                        element.firstChild);
-                                                }
-                                            }
-                                        });
-                                    });
-                                });
-                            }
-                        } catch (err) {
-                            console.error("Gagal render docx:", err);
-                            if (docxLoading) docxLoading.style.display = 'none';
-                            if (tabPlain) tabPlain.click();
-                        }
-                    } else {
-                        // Jika PDF atau TXT, langsung buka tab teks ekstraksi
+                        });
+                        docxTarget.appendChild(pdfFrame);
+                        if (docxLoading) docxLoading.style.display = 'none';
+                    } catch (err) {
+                        console.error('Gagal memuat PDF dokumen:', err);
                         if (docxLoading) docxLoading.style.display = 'none';
                         if (tabPlain) tabPlain.click();
                     }

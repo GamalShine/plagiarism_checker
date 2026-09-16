@@ -135,6 +135,24 @@
             text-align: right;
         }
 
+        .text-document {
+            page-break-after: always;
+            padding: 12px 16px;
+            border: 1px solid #d1d5db;
+            font-family: 'Times New Roman', Times, serif;
+            font-size: 11px;
+            line-height: 1.65;
+            text-align: justify;
+        }
+
+        .text-document-title {
+            margin: 0 0 12px;
+            font-family: Helvetica, Arial, sans-serif;
+            font-size: 14px;
+            font-weight: 700;
+            text-align: left;
+        }
+
         /* ===== TURNITIN-STYLE REPORT PAGE ===== */
         .file-header {
             font-size: 20px;
@@ -430,12 +448,17 @@
         @endforeach
         {{-- Page break sebelum report kalo masih ada gambar --}}
         <div style="page-break-after: always;"></div>
+    @elseif(!empty($highlightedText))
+        <div class="text-document">
+            <div class="text-document-title">Isi Dokumen</div>
+            {!! $highlightedText !!}
+        </div>
     @endif
 
     {{-- HALAMAN REPORT: TURNITIN STYLE ORIGINALITY REPORT --}}
     <div>
 
-        @if(empty($pageImages))
+        @if(empty($pageImages) && empty($highlightedText))
             <div class="fallback-note">
                 Pratinjau halaman dokumen tidak tersedia. Pastikan Node.js dan utilitas PDF sistem tersedia
                 agar halaman Word/PDF dapat ditampilkan.
