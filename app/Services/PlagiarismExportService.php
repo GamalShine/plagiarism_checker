@@ -390,6 +390,8 @@ class PlagiarismExportService
             $this->appendPdfPages($pdf, $coverPath);
 
             $sourcePageCount = $pdf->setSourceFile($sourcePath);
+            $maxPages = max(1, (int) env('PDF_PAGE_MAX', 200));
+            $sourcePageCount = min($sourcePageCount, $maxPages);
             for ($pageNumber = 1; $pageNumber <= $sourcePageCount; $pageNumber++) {
                 $template = $pdf->importPage($pageNumber);
                 $size = $pdf->getTemplateSize($template);
@@ -402,9 +404,14 @@ class PlagiarismExportService
                     continue;
                 }
 
+                $pageItems = $this->extractPhpPageItems($parserPage);
+                if ($pageItems === []) {
+                    continue;
+                }
+
                 foreach ($highlights as $highlight) {
-                    $boxes = $this->findPhpHighlightBoxes(
-                        $parserPage,
+                    $boxes = $this->findPhpHighlightBoxesInItems(
+                        $pageItems,
                         (string) ($highlight['text'] ?? ''),
                         (float) $size['height'],
                     );
@@ -451,13 +458,8 @@ class PlagiarismExportService
         }
     }
 
-    private function findPhpHighlightBoxes(object $page, string $needle, float $pageHeight): array
+    private function extractPhpPageItems(object $page): array
     {
-        $needle = $this->normalizePdfText($needle);
-        if (mb_strlen($needle) < 4) {
-            return [];
-        }
-
         $items = [];
         foreach ($page->getDataTm() as $entry) {
             $matrix = $entry[0] ?? [];
@@ -485,6 +487,19 @@ class PlagiarismExportService
             $joined .= ' ';
         }
         unset($item);
+
+        return ['items' => $items, 'joined' => $joined];
+    }
+
+    private function findPhpHighlightBoxesInItems(array $pageData, string $needle, float $pageHeight): array
+    {
+        $needle = $this->normalizePdfText($needle);
+        if (mb_strlen($needle) < 4) {
+            return [];
+        }
+
+        $items = $pageData['items'] ?? [];
+        $joined = $pageData['joined'] ?? '';
 
         $matchStart = mb_stripos($joined, $needle);
         if ($matchStart === false) {

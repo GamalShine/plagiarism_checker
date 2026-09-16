@@ -83,6 +83,7 @@ PDF_LIGHTWEIGHT=false
 PDF_EXPORT_CACHE=true
 NODE_PATH=
 WORD_COM_ENABLED=false
+PDF_PAGE_MAX=50
 ```
 
 After deployment, clear the Laravel runtime cache:
