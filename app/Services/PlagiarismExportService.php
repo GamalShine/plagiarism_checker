@@ -314,6 +314,19 @@ class PlagiarismExportService
         $filePath = $check->document->file_path
             ? Storage::disk('public')->path($check->document->file_path)
             : '';
+        $highlightedText = $this->buildLightweightHighlightedText($check);
+        $exportCachePath = $this->exportCachePath(
+            $check,
+            $filePath,
+            $highlightedText,
+            $includeAllSources,
+        );
+
+        if ($exportCachePath && is_file($exportCachePath) && filesize($exportCachePath) > 0) {
+            return response()->download($exportCachePath, $downloadName, [
+                'Content-Type' => 'application/pdf',
+            ]);
+        }
 
         $sourcePdf = $this->documentPageRenderer->resolveSourcePdfWithoutShell(
             $filePath,
@@ -324,7 +337,7 @@ class PlagiarismExportService
         if (! $sourcePdf) {
             return $this->renderReportPdf(
                 $check,
-                $this->buildLightweightHighlightedText($check),
+                $highlightedText,
                 $downloadName,
                 $includeAllSources,
             );
@@ -379,9 +392,14 @@ class PlagiarismExportService
                 null,
                 $fallbackHighlights,
             )) {
-                return response()->download($mergedPath, $downloadName, [
+                if ($exportCachePath) {
+                    @copy($mergedPath, $exportCachePath);
+                    @unlink($mergedPath);
+                }
+
+                return response()->download($exportCachePath ?: $mergedPath, $downloadName, [
                     'Content-Type' => 'application/pdf',
-                ])->deleteFileAfterSend(true);
+                ])->deleteFileAfterSend(! $exportCachePath);
             }
         } catch (\Throwable $e) {
             Log::warning('No-Python PDF export failed', [
@@ -661,6 +679,10 @@ class PlagiarismExportService
 
         $output = shell_exec($command);
         @unlink($stderrPath);
+        if (is_file($outputPath) && filesize($outputPath) > 0) {
+            return true;
+        }
+
         if (!is_string($output) || trim($output) === '') {
             return false;
         }
@@ -675,7 +697,7 @@ class PlagiarismExportService
             return false;
         }
 
-        return is_file($outputPath) && filesize($outputPath) > 0;
+        return false;
     }
 
     private function findNodeBinary(): ?string
