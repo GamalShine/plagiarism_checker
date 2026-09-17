@@ -3,9 +3,11 @@
 START_WORKER="${1:-1}"
 END_WORKER="${2:-1}"
 APP_DIR="/home/u704951863/domains/naskahcek.com/public_html"
-LOG_DIR="/home/u704951863"
+LOG_DIR="$APP_DIR/storage/logs"
 
 cd "$APP_DIR" || exit 1
+
+mkdir -p "$LOG_DIR"
 
 for WORKER_ID in $(seq "$START_WORKER" "$END_WORKER"); do
 	LOCK_FILE="/tmp/naskahcek-plagiarism-${WORKER_ID}.lock"
