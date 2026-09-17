@@ -433,8 +433,6 @@ class PlagiarismService
 
     private function sampleSentences(array $sentences): array
     {
-        // Batasi jumlah kalimat per proses agar tidak timeout.
-        // Jika lebih dari 100, kita sebar (sampling) pengambilannya dari awal, tengah, dan akhir.
         $limit = self::MAX_SENTENCES;
 
         if (count($sentences) <= $limit) {
