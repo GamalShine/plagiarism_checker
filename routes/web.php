@@ -5,6 +5,7 @@ use App\Http\Controllers\GuestLinkController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\WelcomeController;
 use App\Support\HomeRoute;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', [WelcomeController::class, 'index'])->name('welcome');
@@ -36,6 +37,28 @@ Route::get('/payment/notification', function () {
         'message' => 'Endpoint webhook aktif. DOKU harus mengirim notifikasi menggunakan POST.',
     ]);
 })->name('payment.notification.health');
+
+Route::get('/internal/cron/plagiarism/{token}', function (string $token) {
+    $configuredToken = (string) config('app.cron_secret');
+
+    abort_if($configuredToken === '' || ! hash_equals($configuredToken, $token), 404);
+
+    set_time_limit(300);
+    $exitCode = Artisan::call('queue:work', [
+        'connection' => 'database',
+        '--queue' => 'plagiarism',
+        '--once' => true,
+        '--tries' => 1,
+        '--timeout' => 300,
+        '--no-interaction' => true,
+    ]);
+
+    return response()->json([
+        'success' => $exitCode === 0,
+        'exit_code' => $exitCode,
+        'output' => trim(Artisan::output()),
+    ], $exitCode === 0 ? 200 : 500);
+})->name('internal.cron.plagiarism');
 
 Route::post('/payment/notification', [PaymentController::class, 'notification'])
     ->name('payment.notification')

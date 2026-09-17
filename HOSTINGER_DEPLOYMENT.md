@@ -67,6 +67,14 @@ The plagiarism job uses the `plagiarism` queue. A shared Hostinger plan needs cr
 
 The script uses a separate lock for each worker slot, so the twenty slots can process jobs concurrently without starting duplicate work in the same slot. Twenty workers can exceed shared-hosting CPU, memory, process, database, or API limits; reduce the ranges if the hosting provider throttles or terminates processes. The command must use the same PHP version selected for the domain. Do not run `queue:work` with the default queue only; plagiarism jobs are explicitly dispatched to `plagiarism`.
 
+If SSH/terminal is unavailable, use cron-job.org with this URL instead of the shell script:
+
+```text
+https://naskahcek.com/internal/cron/plagiarism/ISI_DENGAN_NILAI_CRON_SECRET
+```
+
+Create one or two HTTP jobs that call this URL every minute. Each request processes at most one queued plagiarism job. Set the cron-job.org request timeout to at least 300 seconds. Keep `CRON_SECRET` private and run `php artisan config:clear` followed by `php artisan config:cache` after changing it.
+
 ## 5. Storage and payment callbacks
 
 Confirm that `https://slategray-penguin-737813.hostingersite.com/storage/...` can load a test uploaded file. Update DOKU/Midtrans callback or notification URLs in the provider dashboard to the HTTPS Hostinger domain. Do not use localhost or ngrok URLs in production.
