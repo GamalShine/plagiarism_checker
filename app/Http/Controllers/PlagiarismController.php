@@ -10,6 +10,7 @@ use App\Services\PlagiarismExportService;
 use App\Services\PlagiarismService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\View\View;
@@ -175,8 +176,9 @@ class PlagiarismController extends Controller
             $index++;
         }
 
+        $highlightCacheKey = 'plagiarism:result-html:' . $check->id . ':' . ($check->updated_at?->timestamp ?? 0);
         $highlightedText = function_exists('shell_exec')
-            ? $this->buildHighlightedText($check, $sourceIndexMap)
+            ? Cache::rememberForever($highlightCacheKey, fn () => $this->buildHighlightedText($check, $sourceIndexMap))
             : '';
 
         return view('plagiarism.result', array_merge(
