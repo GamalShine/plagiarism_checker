@@ -58,14 +58,14 @@ Make sure `storage/` and `bootstrap/cache/` are writable by PHP.
 
 ## 4. Queue processing
 
-The plagiarism job uses the `plagiarism` queue. A shared Hostinger plan needs cron jobs because a permanent worker may not be available. Configure two cron jobs every minute with the real account paths. Each command starts two independent worker slots:
+The plagiarism job uses the `plagiarism` queue. A shared Hostinger plan needs cron jobs because a permanent worker may not be available. Configure two cron jobs every minute with the real account paths. Each command starts ten independent worker slots:
 
 ```bash
-/home/USERNAME/run-plagiarism.sh 1 2
-/home/USERNAME/run-plagiarism.sh 3 4
+/home/USERNAME/run-plagiarism.sh 1 10
+/home/USERNAME/run-plagiarism.sh 11 20
 ```
 
-The script uses a separate lock for each worker slot, so the four slots can process jobs concurrently without starting duplicate work in the same slot. Start with four total workers and increase gradually only if the hosting resources remain stable. The command must use the same PHP version selected for the domain. Do not run `queue:work` with the default queue only; plagiarism jobs are explicitly dispatched to `plagiarism`.
+The script uses a separate lock for each worker slot, so the twenty slots can process jobs concurrently without starting duplicate work in the same slot. Twenty workers can exceed shared-hosting CPU, memory, process, database, or API limits; reduce the ranges if the hosting provider throttles or terminates processes. The command must use the same PHP version selected for the domain. Do not run `queue:work` with the default queue only; plagiarism jobs are explicitly dispatched to `plagiarism`.
 
 ## 5. Storage and payment callbacks
 
