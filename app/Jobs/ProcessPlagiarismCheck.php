@@ -15,12 +15,14 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use Throwable;
 
 class ProcessPlagiarismCheck implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    public int $timeout = 1800;
+    public int $timeout = 300;
+    public bool $failOnTimeout = true;
 
     public function __construct(public int $checkId, public array $chapters = [])
     {
@@ -125,5 +127,24 @@ class ProcessPlagiarismCheck implements ShouldQueue
                 $check->sources_checked ?? [],
             );
         }
+    }
+
+    public function failed(?Throwable $exception): void
+    {
+        $check = PlagiarismCheck::find($this->checkId);
+
+        if (! $check || $check->status === 'completed') {
+            return;
+        }
+
+        $check->update([
+            'status' => 'failed',
+            'error_message' => 'Pengecekan melebihi batas waktu 5 menit. Silakan coba lagi dengan dokumen atau sumber yang lebih sedikit.',
+        ]);
+
+        Log::error('Plagiarism check job failed', [
+            'check_id' => $this->checkId,
+            'error' => $exception?->getMessage(),
+        ]);
     }
 }

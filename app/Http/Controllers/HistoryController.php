@@ -15,11 +15,16 @@ class HistoryController extends Controller
 {
     public function index(): View
     {
-        $histories = History::where('user_id', auth()->id())
-            ->latest()
-            ->paginate(20);
+        $query = History::where('user_id', auth()->id());
+        $isAdminHistory = str_starts_with(request()->route()?->getName() ?? '', 'admin.');
 
-        $layout = str_starts_with(request()->route()?->getName() ?? '', 'admin.') ? 'layouts.admin' : 'layouts.user';
+        if ($isAdminHistory) {
+            $query->where('activity_type', 'plagiarism_check');
+        }
+
+        $histories = $query->latest()->paginate(20);
+
+        $layout = $isAdminHistory ? 'layouts.admin' : 'layouts.user';
 
         return view('history.index', array_merge(compact('histories'), ['layout' => $layout]));
     }
