@@ -13,6 +13,7 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use Throwable;
 
 class ProcessPlagiarismCheck implements ShouldQueue
 {
@@ -51,8 +52,11 @@ class ProcessPlagiarismCheck implements ShouldQueue
         ]);
 
         $document = $check->document;
-        $filePath = Storage::disk('public')->path($document->file_path);
-        $content = $plagiarismService->extractTextFromFile($filePath, $document->mime_type ?? '', $selectedChapters);
+        $content = (string) $document->content;
+        if ($document->file_path) {
+            $filePath = Storage::disk('public')->path($document->file_path);
+            $content = $plagiarismService->extractTextFromFile($filePath, $document->mime_type ?? '', $selectedChapters);
+        }
 
         Log::info('Plagiarism section filter completed', [
             'check_id' => $check->id,
@@ -101,5 +105,24 @@ class ProcessPlagiarismCheck implements ShouldQueue
                 $check->sources_checked ?? [],
             );
         }
+    }
+
+    public function failed(?Throwable $exception): void
+    {
+        $check = PlagiarismCheck::find($this->checkId);
+
+        if (! $check || $check->status === 'completed') {
+            return;
+        }
+
+        $check->update([
+            'status' => 'failed',
+            'error_message' => $exception?->getMessage() ?: 'Pengecekan gagal diproses oleh queue worker.',
+        ]);
+
+        Log::error('Plagiarism check job failed', [
+            'check_id' => $this->checkId,
+            'error' => $exception?->getMessage(),
+        ]);
     }
 }
