@@ -815,11 +815,6 @@ if ($score > 0 && $score <= 24) $mainColor='#16a34a' ; elseif ($score> 24 && $sc
                 @endpush
 
                 @push('scripts')
-                {{-- JSZip and docx-preview for rendering 1:1 original Microsoft Word files --}}
-                <script src="https://unpkg.com/jszip/dist/jszip.min.js"></script>
-                <script src="https://unpkg.com/docx-preview/dist/docx-preview.min.js"></script>
-                <script src="https://cdnjs.cloudflare.com/ajax/libs/mark.js/8.11.1/mark.min.js"></script>
-
                 <script>
                 document.addEventListener('DOMContentLoaded', async function() {
                     const fileUrl = @json(($publicMode ?? false) ? asset('storage/' . $check->document->file_path) : route($routePrefix . '.plagiarism.document_docx', $check->id));
@@ -837,6 +832,18 @@ if ($score > 0 && $score <= 24) $mainColor='#16a34a' ; elseif ($score> 24 && $sc
                     const docContainer = document.getElementById('doc-container');
                     let docxLoaded = false;
                     let docxRenderPromise = null;
+
+                    function loadScript(src) {
+                        return new Promise(function(resolve, reject) {
+                            const script = document.createElement('script');
+                            script.src = src;
+                            script.onload = resolve;
+                            script.onerror = function() {
+                                reject(new Error('Gagal memuat library preview dokumen.'));
+                            };
+                            document.head.appendChild(script);
+                        });
+                    }
 
                     // Toggle Tab Word vs Plain Text
                     if (tabWord && tabPlain) {
@@ -871,12 +878,20 @@ if ($score > 0 && $score <= 24) $mainColor='#16a34a' ; elseif ($score> 24 && $sc
                     window.addEventListener('resize', syncContainerHeight);
 
                     async function renderDocx() {
-                        if (docxLoaded || docxRenderPromise || fileExt !== 'docx' || !window.docx || !window.docx.renderAsync) {
+                        if (docxLoaded || docxRenderPromise || fileExt !== 'docx') {
                             return docxRenderPromise;
                         }
 
                         docxRenderPromise = (async function() {
                             try {
+                            await loadScript('https://unpkg.com/jszip/dist/jszip.min.js');
+                            await loadScript('https://unpkg.com/docx-preview/dist/docx-preview.min.js');
+                            await loadScript('https://cdnjs.cloudflare.com/ajax/libs/mark.js/8.11.1/mark.min.js');
+
+                            if (!window.docx || !window.docx.renderAsync) {
+                                throw new Error('Library DOCX preview tidak tersedia.');
+                            }
+
                             const response = await fetch(fileUrl);
                             if (!response.ok) {
                                 throw new Error('Dokumen Word gagal dimuat (' + response.status + ')');
