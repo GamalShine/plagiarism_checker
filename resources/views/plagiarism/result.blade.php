@@ -220,7 +220,7 @@ if ($score > 0 && $score <= 24) $mainColor='#16a34a' ; elseif ($score> 24 && $sc
                                 </svg>
                                 <span>Export PDF</span>
                             </a>
-                            @if($check->total_similarity > 0)
+                            @if(($routePrefix ?? 'user') !== 'user' && $check->total_similarity > 0)
                             <form action="{{ route($routePrefix.'.improvement.analyze') }}" method="POST"
                                 class="w-full">
                                 @csrf
