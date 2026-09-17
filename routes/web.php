@@ -5,7 +5,6 @@ use App\Http\Controllers\GuestLinkController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\WelcomeController;
 use App\Support\HomeRoute;
-use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', [WelcomeController::class, 'index'])->name('welcome');
@@ -20,7 +19,6 @@ Route::get('/guest-payment/{token}/result', [PaymentController::class, 'guestRes
 Route::get('/guest-payment/{token}/export', [PaymentController::class, 'guestExport'])->name('guest.payment.export');
 Route::get('/guest-payment/{token}/error', [PaymentController::class, 'guestError'])->name('guest.payment.error');
 Route::post('/cekplagiasiturnitin/check', [FreeCheckController::class, 'check'])->name('free.check.process');
-Route::get('/cekplagiasiturnitin/status/{plagiarismCheck}', [FreeCheckController::class, 'status'])->name('free.check.status');
 Route::get('/cekplagiasiturnitin/export/{plagiarismCheck}', [FreeCheckController::class, 'export'])->name('free.check.export');
 Route::post('/cekplagiasiturnitin/fetch-url', [FreeCheckController::class, 'fetchUrl'])->name('free.check.fetch_url');
 
@@ -37,28 +35,6 @@ Route::get('/payment/notification', function () {
         'message' => 'Endpoint webhook aktif. DOKU harus mengirim notifikasi menggunakan POST.',
     ]);
 })->name('payment.notification.health');
-
-Route::get('/internal/cron/plagiarism/{token}', function (string $token) {
-    $configuredToken = (string) config('app.cron_secret');
-
-    abort_if($configuredToken === '' || ! hash_equals($configuredToken, $token), 404);
-
-    set_time_limit(300);
-    $exitCode = Artisan::call('queue:work', [
-        'connection' => 'database',
-        '--queue' => 'plagiarism',
-        '--once' => true,
-        '--tries' => 1,
-        '--timeout' => 300,
-        '--no-interaction' => true,
-    ]);
-
-    return response()->json([
-        'success' => $exitCode === 0,
-        'exit_code' => $exitCode,
-        'output' => trim(Artisan::output()),
-    ], $exitCode === 0 ? 200 : 500);
-})->name('internal.cron.plagiarism');
 
 Route::post('/payment/notification', [PaymentController::class, 'notification'])
     ->name('payment.notification')

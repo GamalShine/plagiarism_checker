@@ -220,7 +220,7 @@ if ($score > 0 && $score <= 24) $mainColor='#16a34a' ; elseif ($score> 24 && $sc
                                 </svg>
                                 <span>Export PDF</span>
                             </a>
-                            @if(($routePrefix ?? 'user') !== 'user' && $check->total_similarity > 0)
+                            @if($check->total_similarity > 0)
                             <form action="{{ route($routePrefix.'.improvement.analyze') }}" method="POST"
                                 class="w-full">
                                 @csrf
@@ -404,7 +404,8 @@ if ($score > 0 && $score <= 24) $mainColor='#16a34a' ; elseif ($score> 24 && $sc
 
                         {{-- DAFTAR SUMBER (PRIMARY SOURCES) --}}
                         @php
-                        $visibleSources = $check->sources->filter(fn($s) => $s->matched_words < 1000 && $s->matched_words > 0);
+                        $visibleSources = $check->sources->filter(fn($s) => $s->matched_words < 1000 && $s->
+                            matched_words > 0);
                             @endphp
                             <div
                                 class="rounded-2xl bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700/80 p-4 sm:p-5 shadow-lg shrink-0">
@@ -821,8 +822,7 @@ if ($score > 0 && $score <= 24) $mainColor='#16a34a' ; elseif ($score> 24 && $sc
 
                 <script>
                 document.addEventListener('DOMContentLoaded', async function() {
-                    const fileUrl = @json(($publicMode ?? false) ? asset('storage/' . $check->document->file_path) : route($routePrefix . '.plagiarism.document', $check->id));
-                    const docxUrl = @json(($publicMode ?? false) ? asset('storage/' . $check->document->file_path) : route($routePrefix . '.plagiarism.document_docx', $check->id));
+                    const fileUrl = @json(($publicMode ?? false) ? asset('storage/' . $check->document->file_path) : route($routePrefix . '.plagiarism.document_docx', $check->id));
                     const rawFilename = @json($check->document->original_filename ?? $check->document->file_path);
                     const fileExt = rawFilename.split('.').pop().toLowerCase();
                     const highlights = @json($highlightsList);
@@ -867,68 +867,91 @@ if ($score > 0 && $score <= 24) $mainColor='#16a34a' ; elseif ($score> 24 && $sc
                     syncContainerHeight();
                     window.addEventListener('resize', syncContainerHeight);
 
-                    async function renderOriginalDocx() {
-                        const response = await fetch(docxUrl, { credentials: 'same-origin' });
-                        if (!response.ok) throw new Error('Dokumen Word tidak dapat dimuat.');
+                    // Render DOCX jika filenya adalah docx
+                    if (fileExt === 'docx' && window.docx && window.docx.renderAsync) {
+                        try {
+                            const response = await fetch(fileUrl);
+                            const blob = await response.blob();
 
-                        const buffer = await response.arrayBuffer();
-                        docxTarget.innerHTML = '';
-                        await docx.renderAsync(buffer, docxTarget, null, {
-                            className: 'docx',
-                            inWrapper: true,
-                            ignoreWidth: false,
-                            ignoreHeight: false,
-                            breakPages: true,
-                            renderHeaders: true,
-                            renderFooters: true,
-                            useBase64URL: true,
-                        });
-
-                        const markRoot = new Mark(docxTarget);
-                        for (const highlight of highlights) {
-                            const phrase = String(highlight.original_text || '').replace(/[\r\n\t]+/g, ' ')
-                                .replace(/\s+/g, ' ').trim();
-                            if (phrase.length < 5) continue;
-
-                            await new Promise(resolve => markRoot.mark(phrase, {
-                                acrossElements: true,
-                                separateWordSearch: false,
-                                element: 'mark',
-                                each: element => {
-                                    const color = highlight.color || '#ffeb3b';
-                                    element.className = 't-highlight';
-                                    element.dataset.sourceId = highlight.source_id || '';
-                                    element.dataset.sourceIndex = highlight.index || '*';
-                                    element.dataset.sourceColor = color;
-                                    element.title = highlight.source_label || 'Sumber plagiarisme';
-                                    element.style.backgroundColor = color + '66';
-                                    element.style.borderBottom = '2px solid ' + color;
-                                },
-                                done: resolve,
-                            }));
-                        }
-
-                        if (docxLoading) docxLoading.style.display = 'none';
-                    }
-
-                    // DOCX ditampilkan dari file upload asli, lalu kalimat terdeteksi diberi stabilo sesuai warna sumber.
-                    try {
-                        if (fileExt === 'docx' && typeof docx !== 'undefined' && typeof Mark !== 'undefined') {
-                            await renderOriginalDocx();
-                        } else {
-                            const pdfFrame = document.createElement('iframe');
-                            pdfFrame.src = fileUrl;
-                            pdfFrame.title = 'Dokumen dengan stabilo';
-                            pdfFrame.className = 'w-full rounded-lg border border-slate-300 bg-white';
-                            pdfFrame.style.height = 'min(78vh, 980px)';
-                            pdfFrame.loading = 'lazy';
-                            pdfFrame.addEventListener('load', function() {
-                                if (docxLoading) docxLoading.style.display = 'none';
+                            await window.docx.renderAsync(blob, docxTarget, null, {
+                                className: "docx",
+                                inWrapper: true,
+                                ignoreWidth: false,
+                                ignoreHeight: false,
+                                ignoreFonts: false,
+                                breakPages: true,
+                                useBase64URL: true
                             });
-                            docxTarget.appendChild(pdfFrame);
+
+                            if (docxLoading) docxLoading.style.display = 'none';
+
+                            // Terapkan Stabilo ke dalam dokumen Word asli menggunakan Mark.js
+                            if (window.Mark && highlights.length > 0) {
+                                const instance = new Mark(docxTarget);
+
+                                highlights.forEach(function(h) {
+                                    const cleanText = (h.original_text || '').replace(/\s+/g, ' ')
+                                        .trim();
+                                    if (cleanText.length < 5) return;
+
+                                    // Ekstrak variasi potongan frasa (30-40 karakter atau kata-kata kunci) agar tidak luput jika Word memecah tag XML
+                                    const words = cleanText.split(' ').filter(w => w.length > 2);
+                                    const searchPhrases = [cleanText];
+
+                                    if (words.length >= 4) {
+                                        searchPhrases.push(words.slice(0, 6).join(' '));
+                                        if (words.length >= 10) {
+                                            searchPhrases.push(words.slice(4, 10).join(' '));
+                                        }
+                                    }
+
+                                    searchPhrases.forEach(function(phrase) {
+                                        if (!phrase || phrase.length < 6) return;
+
+                                        instance.mark(phrase, {
+                                            element: "mark",
+                                            className: "t-highlight",
+                                            accuracy: "partially",
+                                            separateWordSearch: false,
+                                            acrossElements: true,
+                                            each: function(element) {
+                                                element.setAttribute(
+                                                    'data-source-id', h
+                                                    .source_id);
+                                                element.setAttribute(
+                                                    'data-source-index', h
+                                                    .index);
+                                                element.setAttribute(
+                                                    'data-source-color', h
+                                                    .color);
+                                                element.style.backgroundColor =
+                                                    h.color + '40';
+                                                element.style.borderBottom =
+                                                    '2px solid ' + h.color;
+
+                                                if (!element.querySelector(
+                                                        '.t-badge')) {
+                                                    const sup = document
+                                                        .createElement('sup');
+                                                    sup.className = 't-badge';
+                                                    sup.style.backgroundColor =
+                                                        h.color;
+                                                    sup.textContent = h.index;
+                                                    element.insertBefore(sup,
+                                                        element.firstChild);
+                                                }
+                                            }
+                                        });
+                                    });
+                                });
+                            }
+                        } catch (err) {
+                            console.error("Gagal render docx:", err);
+                            if (docxLoading) docxLoading.style.display = 'none';
+                            if (tabPlain) tabPlain.click();
                         }
-                    } catch (err) {
-                        console.error('Gagal memuat dokumen asli:', err);
+                    } else {
+                        // Jika PDF atau TXT, langsung buka tab teks ekstraksi
                         if (docxLoading) docxLoading.style.display = 'none';
                         if (tabPlain) tabPlain.click();
                     }

@@ -5,8 +5,6 @@ namespace App\Jobs;
 use App\Models\PlagiarismCheck;
 use App\Models\History;
 use App\Services\HistoryService;
-use App\Services\DocumentPageRenderer;
-use App\Services\PlagiarismExportService;
 use App\Services\PlagiarismService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -20,19 +18,14 @@ class ProcessPlagiarismCheck implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    public int $timeout = 300;
+    public int $timeout = 1800;
 
     public function __construct(public int $checkId, public array $chapters = [])
     {
         $this->onQueue('plagiarism');
     }
 
-    public function handle(
-        PlagiarismService $plagiarismService,
-        HistoryService $historyService,
-        DocumentPageRenderer $documentPageRenderer,
-        PlagiarismExportService $plagiarismExportService,
-    ): void
+    public function handle(PlagiarismService $plagiarismService, HistoryService $historyService): void
     {
         $check = PlagiarismCheck::with(['document.user', 'document.user.settings'])->findOrFail($this->checkId);
 
@@ -58,21 +51,8 @@ class ProcessPlagiarismCheck implements ShouldQueue
         ]);
 
         $document = $check->document;
-        $filePath = $document->file_path
-            ? Storage::disk('public')->path($document->file_path)
-            : '';
-
-        $sourcePdf = $filePath ? $documentPageRenderer->resolveSourcePdf($filePath, $document->id) : null;
-        if ($filePath && strtolower(pathinfo($filePath, PATHINFO_EXTENSION)) === 'docx' && ! $sourcePdf) {
-            Log::warning('Source DOCX could not be converted to PDF during plagiarism processing', [
-                'check_id' => $check->id,
-                'document_id' => $document->id,
-            ]);
-        }
-
-        $content = $filePath
-            ? $plagiarismService->extractTextFromFile($filePath, $document->mime_type ?? '', $selectedChapters)
-            : (string) $document->content;
+        $filePath = Storage::disk('public')->path($document->file_path);
+        $content = $plagiarismService->extractTextFromFile($filePath, $document->mime_type ?? '', $selectedChapters);
 
         Log::info('Plagiarism section filter completed', [
             'check_id' => $check->id,
@@ -107,10 +87,6 @@ class ProcessPlagiarismCheck implements ShouldQueue
             $settings,
             $check,
         );
-
-        if ($check->status === 'completed') {
-            $plagiarismExportService->buildHighlightedSourcePdf($check->fresh());
-        }
 
         if ($check->status === 'completed'
             && ! History::where('user_id', $check->user_id)
