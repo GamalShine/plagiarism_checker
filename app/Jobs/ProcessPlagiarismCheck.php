@@ -20,7 +20,7 @@ class ProcessPlagiarismCheck implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    public int $timeout = 1800;
+    public int $timeout = 300;
 
     public function __construct(public int $checkId, public array $chapters = [])
     {
