@@ -14,7 +14,7 @@ for WORKER_ID in $(seq "$START_WORKER" "$END_WORKER"); do
 	{
 		echo "$(date '+%Y-%m-%d %H:%M:%S') Worker ${WORKER_ID} started"
 		/usr/bin/flock -n "$LOCK_FILE" \
-			/usr/bin/php artisan queue:work database --queue=plagiarism --once --tries=1 --timeout=1800 --verbose
+			/usr/bin/php artisan queue:work database --queue=plagiarism --once --tries=1 --timeout=300 --verbose
 		echo "$(date '+%Y-%m-%d %H:%M:%S') Worker ${WORKER_ID} finished"
 	} >> "$LOG_FILE" 2>&1 &
 done
