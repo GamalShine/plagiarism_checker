@@ -161,10 +161,10 @@ if ($score > 0 && $score <= 24) $mainColor='#16a34a' ; elseif ($score> 24 && $sc
                                 <div
                                     class="flex items-center bg-slate-100 dark:bg-slate-700 p-0.5 rounded-lg text-[11px] font-semibold">
                                     <button type="button" id="tab-word"
-                                        class="px-2.5 py-1 rounded-md bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-2xs transition-all">Dokumen
+                                        class="px-2.5 py-1 rounded-md text-slate-600 dark:text-slate-300 hover:text-indigo-600 transition-all">Dokumen
                                         Word Asli</button>
                                     <button type="button" id="tab-plain"
-                                        class="px-2.5 py-1 rounded-md text-slate-600 dark:text-slate-300 hover:text-indigo-600 transition-all">Teks
+                                        class="px-2.5 py-1 rounded-md bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-2xs transition-all">Teks
                                         Ekstrak</button>
                                 </div>
                                 <div
@@ -183,7 +183,7 @@ if ($score > 0 && $score <= 24) $mainColor='#16a34a' ; elseif ($score> 24 && $sc
                             </div>
 
                             {{-- VIEW 1: DOCX PREVIEW RENDERING 1:1 --}}
-                            <div id="docx-container"
+                            <div id="docx-container" style="display: none;"
                                 class="p-4 sm:p-6 overflow-y-auto flex-1 min-h-0 pc-scrollbar flex flex-col items-center">
                                 <div id="docx-loading"
                                     class="flex flex-col items-center justify-center py-16 text-slate-500 gap-3">
@@ -201,7 +201,7 @@ if ($score > 0 && $score <= 24) $mainColor='#16a34a' ; elseif ($score> 24 && $sc
                             {{-- VIEW 2: TEKS EKSTRAK BERSIH --}}
                             <div id="doc-body"
                                 class="p-8 sm:p-12 text-slate-800 dark:text-slate-100 text-[15px] leading-[2.1] font-normal tracking-wide selection:bg-indigo-100 selection:text-indigo-900 dark:selection:bg-indigo-900 dark:selection:text-indigo-100 overflow-y-auto flex-1 min-h-0 pc-scrollbar bg-white dark:bg-slate-800"
-                                style="display: none;">
+                                style="display: block;">
                                 {!! $highlightedText !!}
                             </div>
                         </div>
@@ -835,6 +835,8 @@ if ($score > 0 && $score <= 24) $mainColor='#16a34a' ; elseif ($score> 24 && $sc
                     const tabPlain = document.getElementById('tab-plain');
                     const sidebarPanel = document.getElementById('sidebar-panel');
                     const docContainer = document.getElementById('doc-container');
+                    let docxLoaded = false;
+                    let docxRenderPromise = null;
 
                     // Toggle Tab Word vs Plain Text
                     if (tabWord && tabPlain) {
@@ -845,6 +847,7 @@ if ($score > 0 && $score <= 24) $mainColor='#16a34a' ; elseif ($score> 24 && $sc
                                 "px-2.5 py-1 rounded-md text-slate-600 dark:text-slate-300 hover:text-indigo-600 transition-all";
                             docxContainer.style.display = "flex";
                             docBody.style.display = "none";
+                            renderDocx();
                         });
                         tabPlain.addEventListener('click', function() {
                             tabPlain.className =
@@ -867,10 +870,17 @@ if ($score > 0 && $score <= 24) $mainColor='#16a34a' ; elseif ($score> 24 && $sc
                     syncContainerHeight();
                     window.addEventListener('resize', syncContainerHeight);
 
-                    // Render DOCX jika filenya adalah docx
-                    if (fileExt === 'docx' && window.docx && window.docx.renderAsync) {
-                        try {
+                    async function renderDocx() {
+                        if (docxLoaded || docxRenderPromise || fileExt !== 'docx' || !window.docx || !window.docx.renderAsync) {
+                            return docxRenderPromise;
+                        }
+
+                        docxRenderPromise = (async function() {
+                            try {
                             const response = await fetch(fileUrl);
+                            if (!response.ok) {
+                                throw new Error('Dokumen Word gagal dimuat (' + response.status + ')');
+                            }
                             const blob = await response.blob();
 
                             await window.docx.renderAsync(blob, docxTarget, null, {
@@ -945,15 +955,22 @@ if ($score > 0 && $score <= 24) $mainColor='#16a34a' ; elseif ($score> 24 && $sc
                                     });
                                 });
                             }
+                            docxLoaded = true;
                         } catch (err) {
                             console.error("Gagal render docx:", err);
-                            if (docxLoading) docxLoading.style.display = 'none';
-                            if (tabPlain) tabPlain.click();
+                            if (docxLoading) {
+                                docxLoading.innerHTML = '<span class="text-xs font-semibold text-red-600">Dokumen Word gagal dimuat. Gunakan Teks Ekstrak.</span>';
+                            }
+                        } finally {
+                            docxRenderPromise = null;
                         }
-                    } else {
-                        // Jika PDF atau TXT, langsung buka tab teks ekstraksi
-                        if (docxLoading) docxLoading.style.display = 'none';
-                        if (tabPlain) tabPlain.click();
+                        })();
+
+                        return docxRenderPromise;
+                    }
+
+                    if (docxLoading && fileExt !== 'docx') {
+                        docxLoading.style.display = 'none';
                     }
 
                     // Interaksi klik scroll ke sorotan
