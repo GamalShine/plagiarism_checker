@@ -1,8 +1,8 @@
 @extends($layout ?? 'layouts.user')
 
-@section('title', 'Riwayat Aktivitas')
+@section('title', 'Riwayat Cek Plagiarisme')
 @section('page-title', 'History')
-@section('page-subtitle', 'Log lengkap semua aktivitas Anda')
+@section('page-subtitle', 'Log aktivitas pengecekan plagiarisme Anda')
 
 @php
     $routePrefix = str_starts_with(request()->route()?->getName() ?? '', 'admin.') ? 'admin' : 'user';
@@ -12,7 +12,7 @@
     <div class="pc-card overflow-hidden">
         <div class="pc-card-header flex justify-between items-center">
             <div>
-                <h3 class="pc-section-title">Semua Aktivitas</h3>
+                <h3 class="pc-section-title">Aktivitas Cek Plagiarisme</h3>
                 <p class="text-xs mt-0.5" style="color: var(--pc-text-muted);">{{ $histories->total() }} entri</p>
             </div>
             <div id="deleteActionContainer" class="hidden items-center">

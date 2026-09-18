@@ -6,7 +6,7 @@
 
 @section('content')
 @if($publicMode ?? false)
-<nav class="fixed left-0 right-0 top-0 z-50 w-full border-b border-slate-200 bg-white shadow-sm">
+<nav class="fixed left-0 right-0 top-[42px] z-50 w-full border-b border-slate-200 bg-white shadow-sm">
     <div class="mx-auto flex h-[72px] max-w-[1180px] items-center justify-between px-5 sm:px-6 lg:px-8">
         <a href="{{ route('welcome') }}" class="flex items-center gap-2.5">
             <img src="{{ asset('images/naskahceklogo.png') }}" alt="NaskahCek" class="h-9 w-9 rounded-xl object-cover">
@@ -14,16 +14,16 @@
         </a>
         <div class="hidden items-center gap-1 md:flex">
             <a href="{{ route('free.check.index') }}"
-                class="rounded-lg bg-blue-50 px-3.5 py-2 text-[13px] font-semibold text-blue-600">Cek Plagiasi
+                class="rounded-lg bg-blue-50 px-3.5 py-2 text-[13px] font-medium text-blue-600">Cek Plagiasi
                 Turnitin</a>
             <a href="{{ route('pricing') }}"
-                class="rounded-lg px-3.5 py-2 text-[13px] font-semibold text-slate-600 hover:bg-slate-50">Paket
+                class="rounded-lg px-3.5 py-2 text-[13px] font-medium text-slate-600 hover:bg-slate-50">Paket
                 Harga</a>
             <a href="{{ route('templates.index') }}"
-                class="rounded-lg px-3.5 py-2 text-[13px] font-semibold text-slate-600 hover:bg-slate-50">Template
+                class="rounded-lg px-3.5 py-2 text-[13px] font-medium text-slate-600 hover:bg-slate-50">Template
                 Jurnal</a>
             <a href="{{ route('welcome') }}#faq"
-                class="rounded-lg px-3.5 py-2 text-[13px] font-semibold text-slate-600 hover:bg-slate-50">Bantuan</a>
+                class="rounded-lg px-3.5 py-2 text-[13px] font-medium text-slate-600 hover:bg-slate-50">Bantuan</a>
         </div>
         <div class="hidden items-center gap-2 md:flex">
             <a href="{{ route('login') }}"
@@ -47,16 +47,16 @@
         class="pointer-events-none absolute left-0 right-0 top-full max-h-0 overflow-hidden border-t border-slate-200 bg-white px-5 opacity-0 shadow-lg transition-all duration-300 ease-out md:hidden">
         <div class="flex flex-col gap-1 pt-3">
             <a href="{{ route('free.check.index') }}"
-                class="rounded-xl bg-blue-50 px-3 py-3 text-sm font-semibold text-blue-600 transition hover:bg-blue-100">Cek
+                class="rounded-xl bg-blue-50 px-3 py-3 text-sm font-medium text-blue-600 transition hover:bg-blue-100">Cek
                 Plagiasi Turnitin</a>
             <a href="{{ route('pricing') }}"
-                class="rounded-xl px-3 py-3 text-sm font-semibold text-slate-700 transition hover:bg-blue-50 hover:text-blue-600">Paket
+                class="rounded-xl px-3 py-3 text-sm font-medium text-slate-700 transition hover:bg-blue-50 hover:text-blue-600">Paket
                 Harga</a>
             <a href="{{ route('templates.index') }}"
-                class="rounded-xl px-3 py-3 text-sm font-semibold text-slate-700 transition hover:bg-blue-50 hover:text-blue-600">Template
+                class="rounded-xl px-3 py-3 text-sm font-medium text-slate-700 transition hover:bg-blue-50 hover:text-blue-600">Template
                 Jurnal</a>
             <a href="{{ route('welcome') }}#faq"
-                class="rounded-xl px-3 py-3 text-sm font-semibold text-slate-700 transition hover:bg-blue-50 hover:text-blue-600">Bantuan</a>
+                class="rounded-xl px-3 py-3 text-sm font-medium text-slate-700 transition hover:bg-blue-50 hover:text-blue-600">Bantuan</a>
             <a href="{{ route('login') }}"
                 class="mt-2 mb-3 inline-flex items-center justify-center rounded-xl bg-blue-600 px-5 py-3 text-sm font-bold text-white transition hover:bg-blue-700">Masuk</a>
         </div>
@@ -64,7 +64,7 @@
 </nav>
 @endif
 <div x-data="plagiarismChecker()"
-    class="{{ ($publicMode ?? false) ? 'relative z-10 mx-auto w-full max-w-[1080px] space-y-5 px-5 pb-6 pt-[80px] sm:space-y-6 sm:px-6 sm:pt-[88px] lg:px-8' : '' }}">
+    class="{{ ($publicMode ?? false) ? 'relative z-10 mx-auto w-full max-w-[1080px] space-y-5 px-5 pb-6 pt-[122px] sm:space-y-6 sm:px-6 sm:pt-[130px] lg:px-8' : '' }}">
     <div x-show="isProcessingPayment" x-cloak class="mb-6 pc-card p-6 sm:p-8">
         <div class="flex items-center gap-4">
             <div

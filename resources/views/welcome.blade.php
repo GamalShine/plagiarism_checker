@@ -5,7 +5,7 @@
 @section('content')
 
 {{-- NAVBAR (FIXED TOP) --}}
-<nav class="fixed left-0 right-0 top-0 z-50 w-full border-b border-slate-200 bg-white shadow-sm">
+<nav class="landing-nav fixed left-0 right-0 top-0 z-50 w-full border-b border-slate-200 bg-white shadow-sm">
     <div class="mx-auto flex h-[72px] max-w-[1320px] items-center justify-between px-5 sm:px-6 lg:px-8">
         <a href="#" class="flex items-center gap-2.5">
             <img src="{{ asset('images/naskahceklogo.png') }}" alt="NaskahCek" class="h-9 w-9 rounded-xl object-cover">
@@ -14,16 +14,16 @@
 
         <div class="hidden items-center gap-1 md:flex">
             <a href="{{ route('free.check.index') }}"
-                class="rounded-lg px-3.5 py-2 text-[13px] font-semibold text-slate-600 transition hover:bg-slate-50 hover:text-blue-600">Cek
+                class="rounded-lg px-3.5 py-2 text-[13px] font-medium text-slate-600 transition hover:bg-slate-50 hover:text-blue-600">Cek
                 Plagiasi Turnitin</a>
             <a href="{{ route('pricing') }}"
-                class="rounded-lg px-3.5 py-2 text-[13px] font-semibold text-slate-600 transition hover:bg-slate-50 hover:text-blue-600">Paket
+                class="rounded-lg px-3.5 py-2 text-[13px] font-medium text-slate-600 transition hover:bg-slate-50 hover:text-blue-600">Paket
                 Harga</a>
             <a href="{{ route('templates.index') }}"
-                class="rounded-lg px-3.5 py-2 text-[13px] font-semibold text-slate-600 transition hover:bg-slate-50 hover:text-blue-600">Template
+                class="rounded-lg px-3.5 py-2 text-[13px] font-medium text-slate-600 transition hover:bg-slate-50 hover:text-blue-600">Template
                 Jurnal</a>
             <a href="#faq"
-                class="rounded-lg px-3.5 py-2 text-[13px] font-semibold text-slate-600 transition hover:bg-slate-50 hover:text-blue-600">Bantuan</a>
+                class="rounded-lg px-3.5 py-2 text-[13px] font-medium text-slate-600 transition hover:bg-slate-50 hover:text-blue-600">Bantuan</a>
         </div>
 
         <div class="hidden items-center gap-2 md:flex">
@@ -49,16 +49,16 @@
         class="pointer-events-none absolute left-0 right-0 top-full max-h-0 overflow-hidden border-t border-slate-200 bg-white px-5 opacity-0 shadow-lg transition-all duration-300 ease-out md:hidden">
         <div class="flex flex-col gap-1">
             <a href="{{ route('free.check.index') }}"
-                class="rounded-xl px-3 py-3 text-sm font-semibold text-slate-700 transition hover:bg-blue-50 hover:text-blue-600">Cek
+                class="rounded-xl px-3 py-3 text-sm font-medium text-slate-700 transition hover:bg-blue-50 hover:text-blue-600">Cek
                 Plagiasi Turnitin</a>
             <a href="{{ route('pricing') }}"
-                class="rounded-xl px-3 py-3 text-sm font-semibold text-slate-700 transition hover:bg-blue-50 hover:text-blue-600">Paket
+                class="rounded-xl px-3 py-3 text-sm font-medium text-slate-700 transition hover:bg-blue-50 hover:text-blue-600">Paket
                 Harga</a>
             <a href="{{ route('templates.index') }}"
-                class="rounded-xl px-3 py-3 text-sm font-semibold text-slate-700 transition hover:bg-blue-50 hover:text-blue-600">Template
+                class="rounded-xl px-3 py-3 text-sm font-medium text-slate-700 transition hover:bg-blue-50 hover:text-blue-600">Template
                 Jurnal</a>
             <a href="#faq"
-                class="rounded-xl px-3 py-3 text-sm font-semibold text-slate-700 transition hover:bg-blue-50 hover:text-blue-600">Bantuan</a>
+                class="rounded-xl px-3 py-3 text-sm font-medium text-slate-700 transition hover:bg-blue-50 hover:text-blue-600">Bantuan</a>
             <a href="{{ route('login') }}"
                 class="mt-2 mb-3 inline-flex items-center justify-center rounded-xl bg-blue-600 px-5 py-3 text-sm font-bold text-white transition hover:bg-blue-700">Masuk</a>
         </div>
@@ -70,7 +70,7 @@
     {{-- HERO --}}
     <section class="relative overflow-hidden bg-[#f5f5f5]">
         <div
-            class="mx-auto mt-4 grid max-w-[1180px] items-center gap-8 px-5 pb-16 pt-4 sm:px-6 lg:mt-5 lg:grid-cols-[0.96fr_1.04fr] lg:px-8 lg:pb-24 lg:pt-8">
+            class="mx-auto mt-4 grid max-w-[1180px] items-center gap-8 px-5 pb-16 pt-4 sm:mt-5 sm:grid-cols-[0.96fr_1.04fr] sm:px-8 sm:pb-24 sm:pt-8">
             <div class="max-w-[560px] justify-self-start">
                 <h1
                     class="text-[40px] font-black leading-[1.08] tracking-[-0.04em] text-slate-950 sm:text-[52px] lg:text-[58px]">
@@ -114,7 +114,7 @@
                 </div>
             </div>
 
-            <div class="relative mt-6 w-full lg:mt-10 lg:justify-self-end lg:pl-4">
+            <div class="relative mt-6 w-full sm:mt-10 sm:justify-self-end sm:pl-4">
                 <div
                     class="absolute left-1/2 top-1/2 h-[115%] w-[110%] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#dfeeff]">
                 </div>
@@ -1106,6 +1106,19 @@ main>section:first-child p {
     max-width: 500px;
 }
 
+/* Keep the hero side-by-side on portrait tablets. */
+@media (min-width: 768px) and (max-width: 1023px) {
+    main>section:first-child>div:last-child {
+        grid-template-columns: minmax(0, 0.96fr) minmax(0, 1.04fr) !important;
+    }
+
+    main>section:first-child>div:last-child>div:last-child {
+        margin-top: 2.5rem !important;
+        padding-left: 1rem !important;
+        justify-self: end !important;
+    }
+}
+
 /* Feature section */
 main .text-slate-300,
 main .text-slate-400 {
@@ -1211,6 +1224,29 @@ main>section:nth-of-type(5) {
     align-self: start;
 }
 
+/* Reduce card and control corner radius while keeping circular indicators round. */
+main .rounded-sm,
+main .rounded-md,
+main .rounded-lg,
+main .rounded-xl,
+main .rounded-2xl,
+main .rounded-3xl,
+main [class~="rounded-[14px]"],
+main [class~="rounded-[18px]"],
+main [class~="rounded-[22px]"],
+footer .rounded-sm,
+footer .rounded-md,
+footer .rounded-lg,
+footer .rounded-xl,
+footer .rounded-2xl {
+    border-radius: 8px !important;
+}
+
+nav .rounded-lg,
+nav .rounded-xl {
+    border-radius: 8px !important;
+}
+
 /* CTA */
 main>section:last-of-type {
     padding-top: 18px !important;
@@ -1218,7 +1254,7 @@ main>section:last-of-type {
 }
 
 main>section:last-of-type>div {
-    border-radius: 18px !important;
+    border-radius: 8px !important;
     padding-top: 48px !important;
     padding-bottom: 48px !important;
 }

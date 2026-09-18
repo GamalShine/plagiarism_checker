@@ -12,7 +12,7 @@
     <link rel="apple-touch-icon" href="{{ asset('images/naskahceklogo.png') }}">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap"
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap"
         rel="stylesheet">
     @php
     $assetQuery = request()->getHost() === 'nuzzle-humpback-showroom.ngrok-free.dev'
@@ -58,11 +58,11 @@
     [x-cloak] {
         display: none !important;
     }
+
     </style>
 </head>
 
 <body class="font-sans antialiased pc-app-bg">
-
     <div id="toast-container" class="fixed top-4 right-4 z-[60] flex flex-col gap-2"></div>
 
     @auth

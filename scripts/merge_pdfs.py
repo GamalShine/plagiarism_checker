@@ -16,18 +16,22 @@ except ImportError:
 
 def parse_color(value: str | None) -> tuple[float, float, float]:
     if not isinstance(value, str):
-        return (1.0, 0.0, 0.0)
+        return (0.99, 0.92, 0.72)
 
     match = re.fullmatch(r"#?([0-9a-fA-F]{6})", value.strip())
     if not match:
-        return (1.0, 0.0, 0.0)
+        return (0.99, 0.92, 0.72)
 
     color = match.group(1)
     return tuple(int(color[index:index + 2], 16) / 255 for index in (0, 2, 4))
 
 
+def soften_color(color: tuple[float, float, float]) -> tuple[float, float, float]:
+    return tuple(min(1.0, channel + 0.18) for channel in color)
+
+
 def add_highlight_label(page: pymupdf.Page, rect: pymupdf.Rect, number: int, color: tuple[float, float, float]) -> None:
-    label_width = max(10, 6 + len(str(number)) * 4)
+    label_width = max(12, 6 + len(str(number)) * 4)
     label_height = 10
     label_rect = pymupdf.Rect(
         rect.x0,
@@ -41,7 +45,7 @@ def add_highlight_label(page: pymupdf.Page, rect: pymupdf.Rect, number: int, col
         str(number),
         fontsize=7,
         fontname="hebo",
-        color=(1, 1, 1),
+        color=(0.12, 0.15, 0.20),
         overlay=True,
     )
 
@@ -79,12 +83,13 @@ def highlight_source_pages(source: pymupdf.Document, highlights: list[dict], dra
 
     for page in source:
         for quads, source_index, color in find_highlight_quads(page, highlights):
+            soft_color = soften_color(color)
             annotation = page.add_highlight_annot(quads)
-            annotation.set_colors(stroke=color)
-            annotation.set_opacity(0.35)
+            annotation.set_colors(stroke=soft_color, fill=soft_color)
+            annotation.set_opacity(0.28)
             annotation.update()
             if draw_labels and source_index > 0:
-                add_highlight_label(page, quads[0].rect, source_index, color)
+                add_highlight_label(page, quads[0].rect, source_index, soft_color)
             applied += 1
 
     return applied
@@ -120,7 +125,7 @@ def insert_pdf(
         return 0
 
     if highlights:
-        highlight_source_pages(source, highlights, draw_labels=False)
+        highlight_source_pages(source, highlights, draw_labels=True)
 
     target.insert_pdf(source, from_page=0, to_page=page_count - 1)
     source.close()

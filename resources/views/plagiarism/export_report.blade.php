@@ -117,12 +117,13 @@
         font-size: 10px;
         text-transform: uppercase;
         letter-spacing: 0.8px;
-        color: #4b5563;
+        color: #374151;
+        opacity: 1;
         margin-top: 0px;
         margin-bottom: 0px;
         padding-top: -2;
         padding-bottom: 6px;
-        font-weight: 400;
+        font-weight: 600;
         border-bottom: 1px solid #111827;
     }
 
@@ -174,6 +175,11 @@
         line-height: 1.45;
         word-break: break-word;
         text-align: left;
+        display: -webkit-box;
+        -webkit-line-clamp: 4;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        text-overflow: ellipsis;
     }
 
     .source-title a,
@@ -307,20 +313,31 @@
         @else
         @php
         $turnitinPalette = [
-        '#ef4444',
-        '#d946ef',
-        '#8b5cf6',
-        '#14b8a6',
-        '#22c55e',
-        '#ca8a04',
-        '#92400e',
-        '#1e40af',
-        '#a855f7',
-        '#65a30d',
-        '#312e81',
+        '#EF4444',
+        '#3B82F6',
+        '#10B981',
+        '#F59E0B',
+        '#8B5CF6',
+        '#14B8A6',
+        '#EC4899',
+        '#F97316',
+        '#6366F1',
+        '#EAB308',
+        '#64748B',
         ];
-        @endphp
-        <table class="source-list" cellpadding="0" cellspacing="0">
+        $truncatePdfTitle = function (?string $value, int $maxChars = 170): string {
+        $text = trim((string) ($value ?? ''));
+        if ($text === '') {
+        return '';
+        }
+
+        $text = preg_replace('/\s+/', ' ', $text);
+        if ($text === null) {
+        return '';
+        }
+
+        if (mb_strlen($text) <= $maxChars) { return $text; } $trimmed=rtrim(mb_substr($text, 0, $maxChars - 3)); return
+            $trimmed . '...' ; }; @endphp <table class="source-list" cellpadding="0" cellspacing="0">
             <tbody>
                 @foreach($visibleSources as $idx => $source)
                 @php
@@ -339,14 +356,16 @@
                 }
                 $sourceLabel = $source->source_label ?? $source->source_name ?? 'Internet';
                 $rowColor = $turnitinPalette[$idx % count($turnitinPalette)];
+                $displayTitle = $truncatePdfTitle($displayTitle, 170);
                 @endphp
                 <tr class="source-row">
                     <td class="source-index-cell">
                         <span class="source-index"
-                            style="background-color: {{ $rowColor }};">{{ $source->turnitin_index ?? ($idx + 1) }}</span>
+                            style="background-color: {{ $rowColor }}; color: #ffffff; font-weight: 400; box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.08);">{{ $source->turnitin_index ?? ($idx + 1) }}</span>
                     </td>
                     <td class="source-info-cell">
-                        <div class="source-title" style="color: {{ $rowColor }};">{{ htmlspecialchars($displayTitle) }}
+                        <div class="source-title" style="color: {{ $rowColor }}; font-weight: 400; opacity: 1;">
+                            {{ htmlspecialchars($displayTitle) }}
                         </div>
                         <div class="source-meta">{{ htmlspecialchars($sourceLabel) }}</div>
                     </td>
@@ -359,26 +378,29 @@
                 </tr>
                 @endforeach
             </tbody>
-        </table>
-        @endif
-
-        <div class="footer"
-            style="text-align: left; font-size: 11px; color: #6b7280; opacity: 0.5; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; line-height: 1.6; margin-top: 30px; border-top: 1px solid #e5e7eb; padding-top: 12px;">
-            <table style="width: 100%; border-collapse: collapse; font-size: 11px; color: #6b7280;">
-                <tr>
-                    <td style="width: 50%; padding: 2px 0;"><strong style="color: #4b5563;">EXCLUDE QUOTES</strong> OFF
-                    </td>
-                    <td style="width: 50%; padding: 2px 0;"><strong style="color: #4b5563;">EXCLUDE SOURCES</strong> OFF
-                    </td>
-                </tr>
-                <tr>
-                    <td style="width: 50%; padding: 2px 0;"><strong style="color: #4b5563;">EXCLUDE
-                            BIBLIOGRAPHY</strong> ON</td>
-                    <td style="width: 50%; padding: 2px 0;"><strong style="color: #4b5563;">EXCLUDE MATCHES</strong> OFF
-                    </td>
-                </tr>
             </table>
-        </div>
+            @endif
+
+            <div class="footer"
+                style="text-align: left; font-size: 11px; color: #878c94; opacity: 1; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; line-height: 1.6; margin-top: 30px; border-top: 1px solid #e5e7eb; padding-top: 12px;">
+                <table style="width: 100%; border-collapse: collapse; font-size: 11px; color: #878c94;">
+                    <tr>
+                        <td style="width: 50%; padding: 2px 0;"><strong style="color: #878c94; opacity: 0.8;">EXCLUDE
+                                QUOTES</strong> OFF
+                        </td>
+                        <td style="width: 50%; padding: 2px 0;"><strong style="color: #878c94; opacity: 0.8;">EXCLUDE
+                                SOURCES</strong> OFF
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="width: 50%; padding: 2px 0;"><strong style="color: #878c94; opacity: 0.8;">EXCLUDE
+                                BIBLIOGRAPHY</strong> ON</td>
+                        <td style="width: 50%; padding: 2px 0;"><strong style="color: #878c94; opacity: 0.8;">EXCLUDE
+                                MATCHES</strong> OFF
+                        </td>
+                    </tr>
+                </table>
+            </div>
 
 </body>
 

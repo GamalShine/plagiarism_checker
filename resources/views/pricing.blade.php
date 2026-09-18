@@ -4,17 +4,17 @@
 
 @section('content')
 <div class="min-h-screen bg-[#f7faff] pt-[72px] text-slate-900">
-    <nav class="fixed left-0 right-0 top-0 z-50 w-full border-b border-slate-200 bg-white shadow-sm">
+    <nav class="landing-nav fixed left-0 right-0 top-0 z-50 w-full border-b border-slate-200 bg-white shadow-sm">
         <div class="mx-auto flex h-[72px] max-w-[1180px] items-center justify-between px-5 sm:px-6 lg:px-8">
             <a href="{{ route('welcome') }}" class="flex items-center gap-2.5">
                 <img src="{{ asset('images/naskahceklogo.png') }}" alt="NaskahCek" class="h-9 w-9 rounded-xl object-cover">
                 <span class="text-[17px] font-extrabold tracking-[-0.02em] text-slate-900">NaskahCek</span>
             </a>
             <div class="hidden items-center gap-1 md:flex">
-                <a href="{{ route('free.check.index') }}" class="rounded-lg px-3.5 py-2 text-[13px] font-semibold text-slate-600 transition hover:bg-slate-50 hover:text-blue-600">Cek Plagiasi Turnitin</a>
-                <a href="{{ route('pricing') }}" class="rounded-lg bg-blue-50 px-3.5 py-2 text-[13px] font-semibold text-blue-600 transition hover:bg-blue-100">Paket Harga</a>
-                <a href="{{ route('templates.index') }}" class="rounded-lg px-3.5 py-2 text-[13px] font-semibold text-slate-600 transition hover:bg-slate-50 hover:text-blue-600">Template Jurnal</a>
-                <a href="{{ route('welcome') }}#faq" class="rounded-lg px-3.5 py-2 text-[13px] font-semibold text-slate-600 transition hover:bg-slate-50 hover:text-blue-600">Bantuan</a>
+                <a href="{{ route('free.check.index') }}" class="rounded-lg px-3.5 py-2 text-[13px] font-medium text-slate-600 transition hover:bg-slate-50 hover:text-blue-600">Cek Plagiasi Turnitin</a>
+                <a href="{{ route('pricing') }}" class="rounded-lg bg-blue-50 px-3.5 py-2 text-[13px] font-medium text-blue-600 transition hover:bg-blue-100">Paket Harga</a>
+                <a href="{{ route('templates.index') }}" class="rounded-lg px-3.5 py-2 text-[13px] font-medium text-slate-600 transition hover:bg-slate-50 hover:text-blue-600">Template Jurnal</a>
+                <a href="{{ route('welcome') }}#faq" class="rounded-lg px-3.5 py-2 text-[13px] font-medium text-slate-600 transition hover:bg-slate-50 hover:text-blue-600">Bantuan</a>
             </div>
             <div class="hidden items-center gap-2 md:flex">
                 <a href="{{ route('login') }}" class="inline-flex items-center rounded-xl bg-blue-600 px-5 py-2.5 text-[13px] font-bold text-white transition hover:bg-blue-700">Masuk</a>
@@ -36,16 +36,16 @@
             class="pointer-events-none absolute left-0 right-0 top-full max-h-0 overflow-hidden border-t border-slate-200 bg-white px-5 opacity-0 shadow-lg transition-all duration-300 ease-out md:hidden">
             <div class="flex flex-col gap-1">
                 <a href="{{ route('free.check.index') }}"
-                    class="rounded-xl px-3 py-3 text-sm font-semibold text-slate-700 transition hover:bg-blue-50 hover:text-blue-600">Cek
+                    class="rounded-xl px-3 py-3 text-sm font-medium text-slate-700 transition hover:bg-blue-50 hover:text-blue-600">Cek
                     Plagiasi Turnitin</a>
                 <a href="{{ route('pricing') }}"
-                    class="rounded-xl bg-blue-50 px-3 py-3 text-sm font-semibold text-blue-600 transition hover:bg-blue-100">Paket
+                    class="rounded-xl bg-blue-50 px-3 py-3 text-sm font-medium text-blue-600 transition hover:bg-blue-100">Paket
                     Harga</a>
                 <a href="{{ route('templates.index') }}"
-                    class="rounded-xl px-3 py-3 text-sm font-semibold text-slate-700 transition hover:bg-blue-50 hover:text-blue-600">Template
+                    class="rounded-xl px-3 py-3 text-sm font-medium text-slate-700 transition hover:bg-blue-50 hover:text-blue-600">Template
                     Jurnal</a>
                 <a href="{{ route('welcome') }}#faq"
-                    class="rounded-xl px-3 py-3 text-sm font-semibold text-slate-700 transition hover:bg-blue-50 hover:text-blue-600">Bantuan</a>
+                    class="rounded-xl px-3 py-3 text-sm font-medium text-slate-700 transition hover:bg-blue-50 hover:text-blue-600">Bantuan</a>
                 <a href="{{ route('login') }}"
                     class="mt-2 mb-3 inline-flex items-center justify-center rounded-xl bg-blue-600 px-5 py-3 text-sm font-bold text-white transition hover:bg-blue-700">Masuk</a>
             </div>

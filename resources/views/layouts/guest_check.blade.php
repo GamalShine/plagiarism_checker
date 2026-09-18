@@ -11,11 +11,55 @@
     <link rel="apple-touch-icon" href="{{ asset('images/naskahceklogo.png') }}">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     <style>[x-cloak]{display:none!important}</style>
 </head>
 <body class="font-sans antialiased pc-app-bg min-h-screen">
+    <div class="promo-marquee-wrapper">
+        <div class="promo-marquee-track">
+            <span>Promo Launching: Cek plagiarisme lebih cepat dengan analisis mendalam dan aman</span>
+            <span>•</span>
+            <span>Diskon khusus untuk mahasiswa, dosen, dan peneliti</span>
+            <span>•</span>
+            <span>Gratis review awal untuk naskah akademik yang ingin diperbaiki</span>
+            <span>•</span>
+            <span>Promo Launching: Cek plagiarisme lebih cepat dengan analisis mendalam dan aman</span>
+            <span>•</span>
+            <span>Diskon khusus untuk mahasiswa, dosen, dan peneliti</span>
+            <span>•</span>
+            <span>Gratis review awal untuk naskah akademik yang ingin diperbaiki</span>
+        </div>
+    </div>
+    <style>
+        .promo-marquee-wrapper {
+            position: sticky;
+            top: 0;
+            z-index: 40;
+            overflow: hidden;
+            background: #1e3a8a;
+            color: #ffffff;
+            border-bottom: 1px solid rgba(255,255,255,0.08);
+        }
+        .promo-marquee-track {
+            display: flex;
+            align-items: center;
+            gap: 1.5rem;
+            white-space: nowrap;
+            min-width: max-content;
+            width: max-content;
+            padding: 0.6rem 0;
+            font-size: 0.75rem;
+            font-weight: 400;
+            letter-spacing: 0.02em;
+            animation: promo-marquee 20s linear infinite;
+        }
+        .promo-marquee-track span { display: inline-block; }
+        @keyframes promo-marquee {
+            from { transform: translateX(0); }
+            to { transform: translateX(-50%); }
+        }
+    </style>
     <header class="border-b" style="border-color: var(--pc-border); background: var(--pc-surface);">
         <div class="max-w-5xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
             <div class="flex items-center gap-3">

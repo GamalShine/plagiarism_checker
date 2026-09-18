@@ -84,7 +84,7 @@ class PlagiarismCheck extends Model
     public function getSimilarityColorAttribute(): string
     {
         $score = $this->total_similarity;
-        if ($score >= 75) return '#ef4444'; // red
+        if ($score >= 75) return '#FDE68A'; // soft yellow
         if ($score >= 50) return '#f97316'; // orange
         if ($score >= 25) return '#eab308'; // yellow
         return '#22c55e'; // green

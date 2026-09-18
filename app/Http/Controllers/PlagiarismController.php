@@ -317,7 +317,7 @@ class PlagiarismController extends Controller
 
                 $sourceId = $highlight->plagiarism_source_id;
                 $tIndex = $sourceIndexMap[$sourceId] ?? '*';
-                $color = $highlight->source->color_code ?? '#ff0000';
+                $color = $highlight->source->color_code ?? '#FDE68A';
 
                 $badge = "<sup class=\"t-badge\" style=\"background-color: {$color};\" title=\"" . htmlspecialchars($highlight->source->source_label ?? '') . " ({$highlight->match_percentage}%)\">{$tIndex}</sup>";
                 $replacement = "<mark class=\"t-highlight\" data-source-id=\"{$sourceId}\" data-source-index=\"{$tIndex}\" data-source-color=\"{$color}\" style=\"background-color: {$color}33; border-bottom: 2px solid {$color};\">{$badge}{$needle}</mark>";
@@ -381,7 +381,7 @@ class PlagiarismController extends Controller
                 'type' => 'mark',
                 'content' => mb_substr($content, $start, $end - $start),
                 'source_id' => $highlight->plagiarism_source_id,
-                'color' => $highlight->source->color_code ?? '#ff0000',
+                'color' => $highlight->source->color_code ?? '#FDE68A',
                 'label' => $highlight->source->source_label ?? '',
                 'percentage' => $highlight->match_percentage,
             ];

@@ -18,9 +18,9 @@ class HistoryController extends Controller
         $query = History::where('user_id', auth()->id());
         $isAdminHistory = str_starts_with(request()->route()?->getName() ?? '', 'admin.');
 
-        if ($isAdminHistory) {
-            $query->where('activity_type', 'plagiarism_check');
-        }
+        // Untuk user, tampilkan hanya aktivitas cek plagiarisme.
+        // Untuk admin juga tetap fokus ke aktivitas plagiarisme.
+        $query->where('activity_type', 'plagiarism_check');
 
         $histories = $query->latest()->paginate(20);
 

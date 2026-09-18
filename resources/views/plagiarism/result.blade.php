@@ -160,12 +160,9 @@ if ($score > 0 && $score <= 24) $mainColor='#16a34a' ; elseif ($score> 24 && $sc
                             <div class="flex items-center gap-3">
                                 <div
                                     class="flex items-center bg-slate-100 dark:bg-slate-700 p-0.5 rounded-lg text-[11px] font-semibold">
-                                    <button type="button" id="tab-word"
-                                        class="px-2.5 py-1 rounded-md text-slate-600 dark:text-slate-300 hover:text-indigo-600 transition-all">Dokumen
-                                        Word Asli</button>
-                                    <button type="button" id="tab-plain"
-                                        class="px-2.5 py-1 rounded-md bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-2xs transition-all">Teks
-                                        Ekstrak</button>
+                                    <span class="px-2.5 py-1 rounded-md bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-2xs transition-all">
+                                        Dokumen
+                                    </span>
                                 </div>
                                 <div
                                     class="hidden sm:flex items-center gap-2 text-slate-500 dark:text-slate-400 font-medium border-l border-slate-200 dark:border-slate-700 pl-3">
@@ -182,8 +179,8 @@ if ($score > 0 && $score <= 24) $mainColor='#16a34a' ; elseif ($score> 24 && $sc
                                 class="h-1.5 w-full bg-gradient-to-r from-indigo-500 via-sky-500 to-emerald-500 shrink-0">
                             </div>
 
-                            {{-- VIEW 1: DOCX PREVIEW RENDERING 1:1 --}}
-                            <div id="docx-container" style="display: none;"
+                            {{-- VIEW DOKUMEN --}}
+                            <div id="docx-container"
                                 class="p-4 sm:p-6 overflow-y-auto flex-1 min-h-0 pc-scrollbar flex flex-col items-center">
                                 <div id="docx-loading"
                                     class="flex flex-col items-center justify-center py-16 text-slate-500 gap-3">
@@ -197,23 +194,16 @@ if ($score > 0 && $score <= 24) $mainColor='#16a34a' ; elseif ($score> 24 && $sc
                                 </div>
                                 <div id="docx-render-target" class="w-full flex flex-col items-center"></div>
                             </div>
-
-                            {{-- VIEW 2: TEKS EKSTRAK BERSIH --}}
-                            <div id="doc-body"
-                                class="p-8 sm:p-12 text-slate-800 dark:text-slate-100 text-[15px] leading-[2.1] font-normal tracking-wide selection:bg-indigo-100 selection:text-indigo-900 dark:selection:bg-indigo-900 dark:selection:text-indigo-100 overflow-y-auto flex-1 min-h-0 pc-scrollbar bg-white dark:bg-slate-800"
-                                style="display: block;">
-                                {!! $highlightedText !!}
-                            </div>
                         </div>
                     </div>
 
                     {{-- BAGIAN SIDEBAR HASIL & METRIK (KANAN) --}}
                     <div id="sidebar-panel" class="lg:col-span-4 flex flex-col gap-4">
                         @if(!($publicMode ?? false))
-                        <div class="grid grid-cols-2 gap-3.5">
+                        <div class="{{ $routePrefix === 'user' ? 'grid grid-cols-1' : 'grid grid-cols-2' }} gap-3.5">
                             <a href="{{ route($routePrefix.'.plagiarism.export', $check->id) }}"
-                                class="pc-btn-secondary pc-btn-sm w-full justify-center shadow-sm inline-flex items-center gap-1.5 font-medium transition-all">
-                                <svg class="w-4 h-4 text-slate-500 dark:text-slate-400" fill="none"
+                                class="{{ $routePrefix === 'user' ? 'pc-btn-primary pc-btn-sm w-full col-span-full justify-center shadow-sm inline-flex items-center gap-1.5 font-medium transition-all' : 'pc-btn-primary pc-btn-sm w-full justify-center shadow-sm inline-flex items-center gap-1.5 font-medium transition-all' }}">
+                                <svg class="w-4 h-4" fill="none"
                                     stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                         d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
@@ -222,12 +212,12 @@ if ($score > 0 && $score <= 24) $mainColor='#16a34a' ; elseif ($score> 24 && $sc
                             </a>
                             @if($check->total_similarity > 0)
                             <form action="{{ route($routePrefix.'.improvement.analyze') }}" method="POST"
-                                class="w-full">
+                                class="{{ $routePrefix === 'user' ? 'hidden' : '' }} w-full">
                                 @csrf
                                 <input type="hidden" name="plagiarism_check_id" value="{{ $check->id }}">
                                 <input type="hidden" name="mode" value="manual">
                                 <button type="submit"
-                                    class="pc-btn-primary pc-btn-sm w-full justify-center shadow-sm inline-flex items-center gap-1.5 font-medium transition-all">
+                                    class="{{ $routePrefix === 'admin' ? 'pc-btn-secondary' : 'pc-btn-primary' }} pc-btn-sm w-full justify-center shadow-sm inline-flex items-center gap-1.5 font-medium transition-all">
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                             d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -825,9 +815,6 @@ if ($score > 0 && $score <= 24) $mainColor='#16a34a' ; elseif ($score> 24 && $sc
                     const docxLoading = document.getElementById('docx-loading');
                     const docxTarget = document.getElementById('docx-render-target');
                     const docxContainer = document.getElementById('docx-container');
-                    const docBody = document.getElementById('doc-body');
-                    const tabWord = document.getElementById('tab-word');
-                    const tabPlain = document.getElementById('tab-plain');
                     const sidebarPanel = document.getElementById('sidebar-panel');
                     const docContainer = document.getElementById('doc-container');
                     let docxLoaded = false;
@@ -845,25 +832,10 @@ if ($score > 0 && $score <= 24) $mainColor='#16a34a' ; elseif ($score> 24 && $sc
                         });
                     }
 
-                    // Toggle Tab Word vs Plain Text
-                    if (tabWord && tabPlain) {
-                        tabWord.addEventListener('click', function() {
-                            tabWord.className =
-                                "px-2.5 py-1 rounded-md bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-2xs transition-all";
-                            tabPlain.className =
-                                "px-2.5 py-1 rounded-md text-slate-600 dark:text-slate-300 hover:text-indigo-600 transition-all";
-                            docxContainer.style.display = "flex";
-                            docBody.style.display = "none";
-                            renderDocx();
-                        });
-                        tabPlain.addEventListener('click', function() {
-                            tabPlain.className =
-                                "px-2.5 py-1 rounded-md bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-2xs transition-all";
-                            tabWord.className =
-                                "px-2.5 py-1 rounded-md text-slate-600 dark:text-slate-300 hover:text-indigo-600 transition-all";
-                            docxContainer.style.display = "none";
-                            docBody.style.display = "block";
-                        });
+                    // Preview dokumen asli selalu aktif; tidak ada toggle ke teks ekstrak.
+                    if (fileExt === 'docx') {
+                        docxContainer.style.display = 'flex';
+                        renderDocx();
                     }
 
                     function syncContainerHeight() {
@@ -1006,25 +978,23 @@ if ($score > 0 && $score <= 24) $mainColor='#16a34a' ; elseif ($score> 24 && $sc
 
                     // Pencari elemen stabilo yang dijamin menemukan target di Word container maupun teks
                     function findBestTarget(sourceId, sourceIndex, snippetText) {
-                        const isWordActive = (docxContainer.style.display !== 'none');
-                        const primaryContainer = isWordActive ? docxTarget : docBody;
-                        const secondaryContainer = isWordActive ? docBody : docxTarget;
+                        const primaryContainer = docxTarget;
 
-                        // 1. Cari exact match data-source-id di container aktif
+                        // 1. Cari exact match data-source-id di dokumen Word
                         if (sourceId) {
                             let m = primaryContainer.querySelector('mark.t-highlight[data-source-id="' +
                                 sourceId + '"]');
                             if (m) return m;
                         }
 
-                        // 2. Cari exact match data-source-index di container aktif
+                        // 2. Cari exact match data-source-index di dokumen Word
                         if (sourceIndex) {
                             let m = primaryContainer.querySelector('mark.t-highlight[data-source-index="' +
                                 sourceIndex + '"]');
                             if (m) return m;
                         }
 
-                        // 3. Cari berdasarkan kemiripan teks kalimat di container aktif
+                        // 3. Cari based on snippet text jika tidak ada di Word container
                         if (snippetText) {
                             const words = snippetText.replace(/["'\r\n]/g, '').trim().split(/\s+/).filter(
                                 w => w.length > 3);
@@ -1035,28 +1005,6 @@ if ($score > 0 && $score <= 24) $mainColor='#16a34a' ; elseif ($score> 24 && $sc
                                     if (allMarks[i].textContent.includes(sample)) {
                                         return allMarks[i];
                                     }
-                                }
-                            }
-                        }
-
-                        // 4. Jika belum ketemu di container utama, cari di container kedua dan pindah tab otomatis
-                        if (secondaryContainer) {
-                            if (sourceId) {
-                                let m = secondaryContainer.querySelector(
-                                    'mark.t-highlight[data-source-id="' + sourceId + '"]');
-                                if (m) {
-                                    if (isWordActive && tabPlain) tabPlain.click();
-                                    else if (!isWordActive && tabWord) tabWord.click();
-                                    return m;
-                                }
-                            }
-                            if (sourceIndex) {
-                                let m = secondaryContainer.querySelector(
-                                    'mark.t-highlight[data-source-index="' + sourceIndex + '"]');
-                                if (m) {
-                                    if (isWordActive && tabPlain) tabPlain.click();
-                                    else if (!isWordActive && tabWord) tabWord.click();
-                                    return m;
                                 }
                             }
                         }

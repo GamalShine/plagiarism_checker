@@ -202,7 +202,7 @@ class FreeCheckController extends Controller
 
         $sources = $check->sources->filter(fn ($source) => $source->matched_words < 1000 && $source->matched_words > 0)->values()->map(fn ($source) => [
             'index' => $sourceIndexMap[$source->id] ?? '*',
-            'color' => $source->color_code ?? '#ff0000',
+            'color' => $source->color_code ?? '#FDE68A',
             'title' => $source->title ?: $source->source_label,
             'source_label' => $source->source_label,
             'matched_words' => $source->matched_words,
@@ -211,7 +211,7 @@ class FreeCheckController extends Controller
 
         $highlights = $check->highlights->map(fn ($highlight) => [
             'index' => $sourceIndexMap[$highlight->plagiarism_source_id] ?? '*',
-            'color' => $highlight->color_code ?? $highlight->source?->color_code ?? '#ff0000',
+            'color' => $highlight->color_code ?? $highlight->source?->color_code ?? '#FDE68A',
             'source_label' => $highlight->source?->source_label ?? 'Sumber',
             'match_percentage' => $highlight->match_percentage,
             'original_text' => $highlight->original_text,

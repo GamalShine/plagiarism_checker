@@ -81,7 +81,7 @@ class PlagiarismExportService
             ]));
         }
 
-        if (($pageImages !== [] || $sourcePdf) && $this->mergePdfs(
+        if (($pageImages !== [] || $sourcePdf) && ($this->mergePdfWithHighlights(
             $mergedPath,
             $coverPath,
             $reportPath,
@@ -89,7 +89,15 @@ class PlagiarismExportService
             $sourcePdf,
             $highlightsManifest,
             'trn:oid:::9817:193844' . str_pad((string) $check->document_id, 3, '0', STR_PAD_LEFT)
-        )) {
+        ) || $this->mergePdfs(
+            $mergedPath,
+            $coverPath,
+            $reportPath,
+            $pageImages !== [] ? $sourceImagesManifest : null,
+            $sourcePdf,
+            $highlightsManifest,
+            'trn:oid:::9817:193844' . str_pad((string) $check->document_id, 3, '0', STR_PAD_LEFT)
+        ))) {
             @unlink($coverPath);
             @unlink($reportPath);
             if (is_file($sourceImagesManifest)) {
@@ -346,6 +354,103 @@ class PlagiarismExportService
         if (is_file($systemFont)) {
             @copy($systemFont, $fontPath);
         }
+    }
+
+    private function mergePdfWithHighlights(
+        string $outputPath,
+        string $coverPath,
+        string $reportPath,
+        ?string $sourceImagesManifest = null,
+        ?string $sourcePath = null,
+        ?string $highlightsManifest = null,
+        ?string $submissionId = null,
+    ): bool {
+        $scriptPath = base_path('scripts/merge_pdfs.py');
+        if (! is_file($scriptPath)) {
+            return false;
+        }
+
+        $pythonBinary = $this->detectPythonBinary();
+        if ($pythonBinary === null) {
+            return false;
+        }
+
+        $args = [$pythonBinary, $scriptPath, $outputPath];
+
+        if (is_file($coverPath) && filesize($coverPath) > 0) {
+            $args[] = '--cover';
+            $args[] = $coverPath;
+        }
+
+        if (is_string($sourcePath) && $sourcePath !== '' && is_file($sourcePath) && filesize($sourcePath) > 0) {
+            $args[] = '--source';
+            $args[] = $sourcePath;
+        }
+
+        if (is_string($sourceImagesManifest) && $sourceImagesManifest !== '' && is_file($sourceImagesManifest)) {
+            $args[] = '--source-images';
+            $args[] = $sourceImagesManifest;
+        }
+
+        if (is_string($highlightsManifest) && $highlightsManifest !== '' && is_file($highlightsManifest)) {
+            $args[] = '--highlights';
+            $args[] = $highlightsManifest;
+        }
+
+        if (is_file($reportPath) && filesize($reportPath) > 0) {
+            $args[] = '--report';
+            $args[] = $reportPath;
+        }
+
+        if (is_string($submissionId) && $submissionId !== '') {
+            $args[] = '--submission-id';
+            $args[] = $submissionId;
+        }
+
+        $command = implode(' ', array_map('escapeshellarg', $args));
+        $output = shell_exec($command . ' 2>&1');
+
+        if (! is_file($outputPath) || filesize($outputPath) <= 0) {
+            Log::warning('Highlighted PDF merge script failed', [
+                'output_path' => $outputPath,
+                'command' => $command,
+                'shell_output' => $output,
+            ]);
+            return false;
+        }
+
+        return true;
+    }
+
+    private function detectPythonBinary(): ?string
+    {
+        $candidates = array_filter([
+            env('PYTHON_PATH'),
+            'C:\\laragon\\www\\plagiarism_checker\\.venv\\Scripts\\python.exe',
+            'C:\\laragon\\www\\plagiarism_checker\\.venv\\bin\\python',
+            PHP_OS_FAMILY === 'Windows' ? 'python' : 'python3',
+            'python',
+            'python3',
+            'py',
+        ]);
+
+        foreach ($candidates as $candidate) {
+            if (is_string($candidate) && is_file($candidate)) {
+                return $candidate;
+            }
+
+            $command = $candidate . ' -c "import sys; print(sys.executable)" 2>NUL';
+            if (PHP_OS_FAMILY !== 'Windows') {
+                $command = $candidate . ' -c "import sys; print(sys.executable)" 2>/dev/null';
+            }
+
+            $path = trim((string) shell_exec($command));
+            if ($path !== '' && $path !== 'php' && $path !== '0') {
+                return $path;
+            }
+        }
+
+        return null;
     }
 
     private function mergePdfs(

@@ -28,11 +28,11 @@ class HistoryService
         ];
 
         $defaultColors = [
-            'plagiarism_check' => '#4ECDC4',
-            'journal_generate' => '#A8E6CF',
-            'improvement'      => '#FFE66D',
-            'login'            => '#74b9ff',
-            'register'         => '#fd79a8',
+            'plagiarism_check' => '#D1FAE5',
+            'journal_generate' => '#DCFCE7',
+            'improvement'      => '#FEF3C7',
+            'login'            => '#DBEAFE',
+            'register'         => '#FCE7F3',
             'export'           => '#b2bec3',
             'settings'         => '#636e72',
         ];
@@ -43,7 +43,7 @@ class HistoryService
             'description'   => $description,
             'metadata'      => $metadata,
             'icon'          => $icon ?? ($defaultIcons[$activityType] ?? '📌'),
-            'color'         => $color ?? ($defaultColors[$activityType] ?? '#94a3b8'),
+            'color'         => $color ?? ($defaultColors[$activityType] ?? '#E2E8F0'),
         ]);
     }
 

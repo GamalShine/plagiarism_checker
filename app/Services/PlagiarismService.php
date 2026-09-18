@@ -20,19 +20,19 @@ class PlagiarismService
     private const PLAGIARIZED_THRESHOLD = 50; // > 50% = plagiat
 
     private array $sourceColors = [
-        'internet'         => '#FF6B6B',
-        'web'              => '#FF6B6B',
-        'wikipedia'        => '#74B9FF',
-        'google_scholar'   => '#4ECDC4',
-        'elsevier'         => '#FFE66D',
-        'semantic_scholar' => '#A29BFE',
-        'europe_pmc'       => '#55EFC4',
-        'plos'             => '#FD79A8',
-        'gutenberg'        => '#E17055',
-        'publications'     => '#A8E6CF',
-        'openalex'         => '#A8E6CF',
-        'crossref'         => '#FF8A5C',
-        'crossref_posted'  => '#6C5CE7',
+        'internet'         => '#FECACA',
+        'web'              => '#FECACA',
+        'wikipedia'        => '#DBEAFE',
+        'google_scholar'   => '#D1FAE5',
+        'elsevier'         => '#FEF3C7',
+        'semantic_scholar' => '#EDE9FE',
+        'europe_pmc'       => '#DCFCE7',
+        'plos'             => '#FCE7F3',
+        'gutenberg'        => '#FED7AA',
+        'publications'     => '#F1F5F9',
+        'openalex'         => '#DCFCE7',
+        'crossref'         => '#FDE68A',
+        'crossref_posted'  => '#E0E7FF',
         'submitted_works'  => '#FDCB6E',
     ];
 
@@ -280,7 +280,7 @@ class PlagiarismService
         foreach ($sourceStats as $key => $stats) {
             $best = $stats['bestMatch'];
             $repo = $best['repository'];
-            $color = $this->sourceColors[$repo] ?? '#94a3b8';
+            $color = $this->sourceColors[$repo] ?? '#E2E8F0';
             $label = $best['repositoryLabel'] ?? $this->sourceLabels[$repo] ?? ucfirst($repo);
 
             $savedSources[$key] = PlagiarismSource::create([

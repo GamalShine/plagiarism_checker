@@ -22,7 +22,7 @@
                 </p>
             </div>
 
-            <div class="flex flex-col items-stretch gap-2 self-start lg:items-end">
+            <div class="hidden" aria-hidden="true">
                 <a href="{{ route('user.plagiarism.index') }}" class="pc-btn-primary pc-btn-sm w-full min-w-[150px] lg:w-auto">
                     <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
                     Cek Baru
