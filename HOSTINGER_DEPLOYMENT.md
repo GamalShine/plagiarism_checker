@@ -79,11 +79,18 @@ PDF/DOCX conversion features that require Python or Microsoft Word may not work 
 The PDF export has a PHP-only fallback and does not require Node.js when the uploaded document is already a PDF with a text layer. Use these production settings:
 
 ```env
-PDF_LIGHTWEIGHT=false
+PDF_LIGHTWEIGHT=true
 PDF_EXPORT_CACHE=true
 NODE_PATH=
 WORD_COM_ENABLED=false
+PYTHON_PATH=
 ```
+
+With `PDF_LIGHTWEIGHT=true`, export uses the PHP-only summary path and does not
+require Python, PyMuPDF, or a Python virtual environment. DOCX downloads already
+use PHPWord and PDF merging uses the installed FPDI/FPDF packages. Set
+`PDF_LIGHTWEIGHT=false` only when Python and PyMuPDF are available and the full
+page-preserving PDF export is required.
 
 After deployment, clear the Laravel runtime cache:
 

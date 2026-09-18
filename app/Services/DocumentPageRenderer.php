@@ -493,6 +493,10 @@ class DocumentPageRenderer
             env('PYTHON_PATH'),
             'C:\\laragon\\bin\\python\\python-3.13\\python.exe',
             'C:\\laragon\\bin\\python\\python-3.12\\python.exe',
+            base_path('.venv/bin/python'),
+            base_path('venv/bin/python'),
+            '/usr/bin/python3',
+            '/usr/local/bin/python3',
             'python3',
             'python',
         ]);
