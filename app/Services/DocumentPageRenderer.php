@@ -77,12 +77,12 @@ class DocumentPageRenderer
         $highlightedCacheKey = md5(json_encode(array_map(
             fn ($highlight) => [
                 'text' => (string) ($highlight->original_text ?? ''),
-                'color' => (string) ($highlight->color_code ?? $highlight->source?->color_code ?? '#FFF3A3'),
+                'color' => (string) ($highlight->color_code ?? $highlight->source?->color_code ?? 'transparent'),
             ],
             $highlights,
         ),
             JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES,
-        ));
+        ) . '|highlight-render-v4');
         $cachedPdf = $highlights !== []
             ? $cacheDir . DIRECTORY_SEPARATOR . 'highlighted-source-' . $highlightedCacheKey . '.pdf'
             : $cacheDir . DIRECTORY_SEPARATOR . 'phpword-source.pdf';
@@ -142,7 +142,7 @@ class DocumentPageRenderer
         file_put_contents($highlightsPath, json_encode(array_map(
             fn ($highlight) => [
                 'text' => $highlight->original_text,
-                'color' => $highlight->color_code ?? $highlight->source?->color_code ?? '#FFF3A3',
+                'color' => $highlight->color_code ?? $highlight->source?->color_code ?? 'transparent',
             ],
             $highlights,
         ), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));

@@ -22,11 +22,18 @@ if ($score > 0 && $score <= 24) $mainColor='#16a34a' ; elseif ($score> 24 && $sc
             }
             }
 
+            $sourcePalette = [
+            '#EF4444', '#3B82F6', '#10B981', '#F59E0B', '#8B5CF6',
+            '#14B8A6', '#EC4899', '#F97316', '#6366F1', '#06B6D4', '#84CC16',
+            ];
+
             $highlightsList = [];
             foreach ($check->highlights as $h) {
             $raw = trim($h->original_text);
             if (mb_strlen($raw) < 5) continue; $highlightsList[]=[ 'original_text'=> $raw,
-                'color' => $h->source->color_code ?? '#ff0000',
+                'color' => is_numeric($sourceIndexMap[$h->plagiarism_source_id] ?? null)
+                    ? $sourcePalette[(($sourceIndexMap[$h->plagiarism_source_id] - 1) % count($sourcePalette))]
+                    : '#84CC16',
                 'index' => $sourceIndexMap[$h->plagiarism_source_id] ?? '*',
                 'source_label' => $h->source->source_label ?? '',
                 'source_id' => $h->plagiarism_source_id,
@@ -415,13 +422,14 @@ if ($score > 0 && $score <= 24) $mainColor='#16a34a' ; elseif ($score> 24 && $sc
                                 <div class="space-y-2 max-h-60 overflow-y-auto pc-scrollbar pr-1">
                                     @forelse($visibleSources as $src)
                                     @php($srcIndex = $sourceIndexMap[$src->id] ?? '*')
+                                    @php($srcColor = is_numeric($srcIndex) ? $sourcePalette[($srcIndex - 1) % count($sourcePalette)] : '#84CC16')
                                     @php($srcHC = $check->highlights->where('plagiarism_source_id', $src->id)->count())
                                     <div class="group flex items-start gap-3 p-2 rounded-xl border border-slate-200/70 dark:border-slate-700/70 hover:border-indigo-300 dark:hover:border-indigo-600 hover:bg-indigo-50/40 dark:hover:bg-slate-700/50 transition-all cursor-pointer shadow-2xs"
                                         data-source-id="{{ $src->id }}" data-source-index="{{ $srcIndex }}"
-                                        data-source-color="{{ $src->color_code ?? '#ff0000' }}">
+                                        data-source-color="{{ $srcColor }}">
                                         <span
                                             class="inline-flex items-center justify-center w-5 h-5 rounded-md text-white font-bold text-[10px] shadow-xs shrink-0 mt-0.5 transition-transform group-hover:scale-105"
-                                            style="background-color: {{ $src->color_code ?? '#ff0000' }};">
+                                            style="background-color: {{ $srcColor }};">
                                             {{ $srcIndex }}
                                         </span>
                                         <div class="flex-1 min-w-0">
@@ -469,7 +477,7 @@ if ($score > 0 && $score <= 24) $mainColor='#16a34a' ; elseif ($score> 24 && $sc
                                 <div class="space-y-2 overflow-y-auto pc-scrollbar pr-1 max-h-60">
                                     @foreach($check->highlights as $h)
                                     @php($tIndex = $sourceIndexMap[$h->plagiarism_source_id] ?? '*')
-                                    @php($color = $h->source->color_code ?? '#ff0000')
+                                    @php($color = is_numeric($tIndex) ? $sourcePalette[($tIndex - 1) % count($sourcePalette)] : '#84CC16')
                                     <div class="group p-2.5 rounded-xl border border-slate-200/70 dark:border-slate-700/70 hover:border-slate-300 dark:hover:border-slate-600 hover:bg-slate-50/80 dark:hover:bg-slate-700/40 transition-all cursor-pointer shadow-2xs"
                                         data-highlight-source-id="{{ $h->plagiarism_source_id }}"
                                         data-highlight-text="{{ e($h->original_text) }}"

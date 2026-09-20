@@ -38,6 +38,27 @@ class PlagiarismExportService
         $sourceImagesManifest = $tempDir . DIRECTORY_SEPARATOR . 'source_images.json';
         $highlightsManifest = $tempDir . DIRECTORY_SEPARATOR . 'highlights.json';
 
+        $sourcePalette = [
+            '#EF4444', '#3B82F6', '#10B981', '#F59E0B', '#8B5CF6',
+            '#14B8A6', '#EC4899', '#F97316', '#6366F1', '#06B6D4', '#64748B',
+        ];
+
+        $sourceIndexes = $check->sources->values()->mapWithKeys(
+            function ($source, $index) use ($sourcePalette) {
+                $source->turnitin_index = $index + 1;
+                $source->color_code = $sourcePalette[$index % count($sourcePalette)];
+
+                return [$source->id => $index + 1];
+            }
+        );
+
+        foreach ($check->highlights as $highlight) {
+            $sourceIndex = $sourceIndexes[$highlight->plagiarism_source_id] ?? 0;
+            if ($sourceIndex > 0) {
+                $highlight->color_code = $sourcePalette[($sourceIndex - 1) % count($sourcePalette)];
+            }
+        }
+
         $filePath = $check->document->file_path
             ? Storage::disk('public')->path($check->document->file_path)
             : '';
@@ -55,14 +76,10 @@ class PlagiarismExportService
 
         $this->ensureHangulFont();
 
-        $sourceIndexes = $check->sources->values()->mapWithKeys(
-            fn ($source, $index) => [$source->id => $source->turnitin_index ?? ($index + 1)]
-        );
-
         file_put_contents($highlightsManifest, json_encode(
             $check->highlights->map(fn ($highlight) => [
                 'text' => $highlight->original_text,
-                'color' => $highlight->color_code ?? $highlight->source?->color_code ?? '#ef4444',
+                'color' => $highlight->color_code ?? $highlight->source?->color_code ?? 'transparent',
                 'source_index' => $sourceIndexes[$highlight->plagiarism_source_id] ?? 0,
             ])->values()->all(),
             JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
@@ -222,7 +239,7 @@ class PlagiarismExportService
                 continue;
             }
 
-            $color = $highlight->color_code ?? $highlight->source?->color_code ?? '#fff3a3';
+            $color = 'transparent';
             $replacement = '<mark style="background-color: ' . htmlspecialchars($color, ENT_QUOTES, 'UTF-8') . ';">' . $needle . '</mark>';
             $text = str_replace($needle, $replacement, $text);
         }
@@ -359,6 +376,34 @@ class PlagiarismExportService
         ?string $highlightsManifest = null,
         ?string $submissionId = null
     ): bool {
+        $nodeScript = base_path('scripts/merge_pdfs.mjs');
+        if (is_file($nodeScript) && $sourcePath && is_file($sourcePath)) {
+            @unlink($outputPath);
+            $arguments = [
+                'node',
+                escapeshellarg($nodeScript),
+                escapeshellarg($outputPath),
+                '--cover', escapeshellarg($coverPath),
+                '--source', escapeshellarg($sourcePath),
+                '--report', escapeshellarg($reportPath),
+            ];
+
+            if ($highlightsManifest && is_file($highlightsManifest)) {
+                $arguments[] = '--highlights';
+                $arguments[] = escapeshellarg($highlightsManifest);
+            }
+
+            $output = shell_exec(implode(' ', $arguments) . ' 2>&1');
+            if (is_file($outputPath) && filesize($outputPath) > 0) {
+                return true;
+            }
+
+            Log::warning('Node PDF merge failed, trying FPDI fallback', [
+                'check_id' => $submissionId,
+                'output' => $output,
+            ]);
+        }
+
         $pdf = new Fpdi();
         $importedPage = false;
         $sourcePdfPaths = [];
@@ -420,26 +465,4 @@ class PlagiarismExportService
         return is_file($outputPath) && filesize($outputPath) > 0;
     }
 
-    private function findPythonBinary(): ?string
-    {
-        $candidates = array_filter([
-            env('PYTHON_PATH'),
-            'C:\\laragon\\bin\\python\\python-3.13\\python.exe',
-            'C:\\laragon\\bin\\python\\python-3.12\\python.exe',
-            'python3',
-            'python',
-        ]);
-
-        foreach ($candidates as $candidate) {
-            if (in_array($candidate, ['python', 'python3'], true)) {
-                return $candidate;
-            }
-
-            if (is_string($candidate) && is_file($candidate)) {
-                return $candidate;
-            }
-        }
-
-        return null;
-    }
 }

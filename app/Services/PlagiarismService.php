@@ -13,27 +13,26 @@ use Illuminate\Support\Facades\Log;
 
 class PlagiarismService
 {
-    private const MAX_SENTENCES       = 50;
     private const OVERALL_SCORE_OFFSET = 4;
     private const MIN_CONTENT_LENGTH  = 50;   // Konten sumber minimal 50 char (sama seperti Node.js: content.length < 50)
     private const MATCH_THRESHOLD     = 0.04; // > 4% = match valid; cap display to 4% to match Turnitin-style reporting
     private const PLAGIARIZED_THRESHOLD = 50; // > 50% = plagiat
 
     private array $sourceColors = [
-        'internet'         => '#FECACA',
-        'web'              => '#FECACA',
-        'wikipedia'        => '#DBEAFE',
-        'google_scholar'   => '#D1FAE5',
-        'elsevier'         => '#FEF3C7',
-        'semantic_scholar' => '#EDE9FE',
-        'europe_pmc'       => '#DCFCE7',
-        'plos'             => '#FCE7F3',
-        'gutenberg'        => '#FED7AA',
-        'publications'     => '#F1F5F9',
-        'openalex'         => '#DCFCE7',
-        'crossref'         => '#FDE68A',
-        'crossref_posted'  => '#E0E7FF',
-        'submitted_works'  => '#FDCB6E',
+        'internet'         => '#84CC16',
+        'web'              => '#84CC16',
+        'wikipedia'        => '#84CC16',
+        'google_scholar'   => '#84CC16',
+        'elsevier'         => '#84CC16',
+        'semantic_scholar' => '#84CC16',
+        'europe_pmc'       => '#84CC16',
+        'plos'             => '#84CC16',
+        'gutenberg'        => '#84CC16',
+        'publications'     => '#84CC16',
+        'openalex'         => '#84CC16',
+        'crossref'         => '#84CC16',
+        'crossref_posted'  => '#84CC16',
+        'submitted_works'  => '#84CC16',
     ];
 
     private array $sourceLabels = [
@@ -86,8 +85,8 @@ class PlagiarismService
                 throw new \Exception('Tidak ada kalimat valid. Pastikan dokumen memiliki kalimat panjang (>20 karakter) yang dipisah titik (.), tanda seru (!), atau tanda tanya (?)');
             }
 
-            // Ambil sampel merata jika kalimat > MAX_SENTENCES (sama seperti Node.js)
-            $selectedSentences = $this->sampleSentences($sentences);
+            // Periksa semua kalimat agar setiap kecocokan dapat dibuat highlight.
+            $selectedSentences = $sentences;
 
             // Per-sentence: search sumber → compare → catat hasil
             $sentenceResults = [];
@@ -269,12 +268,6 @@ class PlagiarismService
 
         uasort($sourceStats, fn($a, $b) => $b['topSimilarity'] <=> $a['topSimilarity']);
 
-        // Pangkas sumber terbawah tambahan 30% lagi (total pangkas 65% dari bawah, hanya simpan 35% sumber teratas yang paling relevan)
-        if (count($sourceStats) > 5) {
-            $keepCount = (int) ceil(count($sourceStats) * 0.35);
-            $sourceStats = array_slice($sourceStats, 0, $keepCount, true);
-        }
-
         $savedSources = [];
 
         foreach ($sourceStats as $key => $stats) {
@@ -405,6 +398,20 @@ class PlagiarismService
             ];
         }
 
+        // Word/PDF extraction may replace spaces with line breaks or tabs.
+        $pattern = preg_quote($sentence, '/');
+        $pattern = preg_replace('/\\\\s+/u', '\\s+', $pattern);
+        if (is_string($pattern) && preg_match('/' . $pattern . '/iu', $content, $match, PREG_OFFSET_CAPTURE)) {
+            $matchedText = (string) ($match[0][0] ?? '');
+            $byteOffset = (int) ($match[0][1] ?? 0);
+            $start = mb_strlen(substr($content, 0, $byteOffset));
+
+            return [
+                'start' => $start,
+                'end' => $start + mb_strlen($matchedText),
+            ];
+        }
+
         return null;
     }
 
@@ -429,27 +436,6 @@ class PlagiarismService
         preg_match_all('/\p{L}/u', $sentence, $letters);
 
         return count($letters[0] ?? []) >= 15;
-    }
-
-    private function sampleSentences(array $sentences): array
-    {
-        $limit = self::MAX_SENTENCES;
-
-        if (count($sentences) <= $limit) {
-            return $sentences;
-        }
-
-        $step = count($sentences) / $limit;
-        $sampled = [];
-
-        for ($i = 0; $i < $limit; $i++) {
-            $index = (int) round($i * $step);
-            if (isset($sentences[$index])) {
-                $sampled[] = $sentences[$index];
-            }
-        }
-
-        return $sampled;
     }
 
     public function normalizeSelectedChapterKeys(array $chapters): array

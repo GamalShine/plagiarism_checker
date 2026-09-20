@@ -317,7 +317,7 @@ class PlagiarismController extends Controller
 
                 $sourceId = $highlight->plagiarism_source_id;
                 $tIndex = $sourceIndexMap[$sourceId] ?? '*';
-                $color = $highlight->source->color_code ?? '#FDE68A';
+                $color = 'transparent';
 
                 $badge = "<sup class=\"t-badge\" style=\"background-color: {$color};\" title=\"" . htmlspecialchars($highlight->source->source_label ?? '') . " ({$highlight->match_percentage}%)\">{$tIndex}</sup>";
                 $replacement = "<mark class=\"t-highlight\" data-source-id=\"{$sourceId}\" data-source-index=\"{$tIndex}\" data-source-color=\"{$color}\" style=\"background-color: {$color}33; border-bottom: 2px solid {$color};\">{$badge}{$needle}</mark>";
@@ -381,7 +381,7 @@ class PlagiarismController extends Controller
                 'type' => 'mark',
                 'content' => mb_substr($content, $start, $end - $start),
                 'source_id' => $highlight->plagiarism_source_id,
-                'color' => $highlight->source->color_code ?? '#FDE68A',
+                'color' => 'transparent',
                 'label' => $highlight->source->source_label ?? '',
                 'percentage' => $highlight->match_percentage,
             ];
@@ -406,7 +406,7 @@ class PlagiarismController extends Controller
             }
 
             $tIndex = $sourceIndexMap[$segment['source_id']] ?? '*';
-            $color = $segment['color'];
+            $color = 'transparent';
             $badge = "<sup class=\"t-badge\" style=\"background-color: {$color};\" title=\"" . htmlspecialchars($segment['label']) . " ({$segment['percentage']}%)\">{$tIndex}</sup>";
             $html .= "<mark class=\"t-highlight\" data-source-id=\"{$segment['source_id']}\" data-source-index=\"{$tIndex}\" data-source-color=\"{$color}\" style=\"background-color: {$color}66;\">{$badge}" . htmlspecialchars($segment['content']) . '</mark>';
         }

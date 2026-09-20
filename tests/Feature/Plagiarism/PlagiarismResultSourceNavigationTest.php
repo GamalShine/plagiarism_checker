@@ -116,7 +116,7 @@ class PlagiarismResultSourceNavigationTest extends TestCase
         $html = $controller->buildHighlightedText($check, [$source->id => 1]);
 
         $this->assertStringContainsString('<span class="t-highlight"', $html);
-        $this->assertStringContainsString('background: #ff0000', strtolower($html));
+        $this->assertStringContainsString('background: #fff3a3', strtolower($html));
         $this->assertStringNotContainsString('<mark class="t-highlight"', $html);
         $this->assertStringNotContainsString('#ff000033', strtolower($html));
         $this->assertStringNotContainsString('#ff000066', strtolower($html));
