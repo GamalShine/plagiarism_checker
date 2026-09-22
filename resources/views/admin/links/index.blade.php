@@ -2,7 +2,7 @@
 
 @section('title', 'Kelola Link')
 @section('page-title', 'Link Sekali Pakai')
-@section('page-subtitle', 'Buat dan kelola link cek plagiarisme tanpa login')
+@section('page-subtitle', 'Buat dan kelola link cek plagiasi tanpa login')
 
 @section('content')
 <div class="space-y-6">
@@ -101,10 +101,7 @@
                                         </form>
                                     @endunless
                                     <form action="{{ route('admin.links.destroy', $link) }}" method="POST"
-                                          class="delete-confirm-form"
-                                          data-confirm-title="Hapus link ini?"
-                                          data-confirm-text="Link yang dihapus tidak bisa dikembalikan."
-                                          data-confirm-button="Ya, hapus">
+                                          onsubmit="return confirm('Hapus link ini?')">
                                         @csrf
                                         @method('DELETE')
                                         <button type="submit" class="pc-btn-soft pc-btn-sm text-red-600">Hapus</button>

@@ -5,38 +5,10 @@
 @section('page-subtitle', 'Ringkasan aktivitas dan statistik Anda')
 
 @section('content')
-    @php
-        $userName = trim(auth()->user()->name ?? 'Pengguna');
-        $firstName = explode(' ', $userName)[0] ?? 'Pengguna';
-    @endphp
-
-    <div class="pc-dashboard-hero pc-card p-6 sm:p-7 lg:p-8">
-        <div class="relative z-10 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-            <div class="max-w-2xl">
-                <p class="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-300">Overview</p>
-                <h2 class="mt-3 text-2xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-3xl">
-                    Selamat datang kembali, {{ $firstName }}
-                </h2>
-                <p class="mt-2 hidden text-sm leading-6 text-slate-600 dark:text-slate-300 sm:block">
-                    Pantau progress pengecekan, jurnal, dan perbaikan dokumen Anda dalam satu dashboard yang lebih rapi dan mudah dibaca.
-                </p>
-            </div>
-
-            <div class="hidden" aria-hidden="true">
-                <a href="{{ route('user.plagiarism.index') }}" class="pc-btn-primary pc-btn-sm w-full min-w-[150px] lg:w-auto">
-                    <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
-                    Cek Baru
-                </a>
-                <a href="{{ route('user.history.index') }}" class="pc-btn-secondary pc-btn-sm w-full min-w-[150px] lg:w-auto">
-                    Lihat History
-                </a>
-            </div>
-        </div>
-    </div>
 
     {{-- Stats --}}
-    <div class="dashboard-stats-grid grid grid-cols-2 gap-4 lg:gap-5 xl:grid-cols-4">
-        <div class="dashboard-stat-card pc-stat-card pc-stat-card-indigo">
+    <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 lg:gap-5">
+        <div class="pc-stat-card">
             <div class="flex items-start justify-between">
                 <div class="pc-stat-icon">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
@@ -44,10 +16,10 @@
                 <span class="pc-badge-neutral">Total</span>
             </div>
             <p class="pc-stat-value">{{ number_format($totalChecks) }}</p>
-            <p class="pc-stat-label">Cek Plagiarisme Selesai</p>
+            <p class="pc-stat-label">Cek Plagiasi Selesai</p>
         </div>
 
-        <div class="dashboard-stat-card pc-stat-card pc-stat-card-teal">
+        <div class="pc-stat-card">
             <div class="flex items-start justify-between">
                 <div class="pc-stat-icon" style="background: var(--pc-accent-soft); color: var(--pc-accent);">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/></svg>
@@ -58,7 +30,7 @@
             <p class="pc-stat-label">Overall Similarity</p>
         </div>
 
-        <div class="dashboard-stat-card pc-stat-card pc-stat-card-violet">
+        <div class="pc-stat-card">
             <div class="flex items-start justify-between">
                 <div class="pc-stat-icon">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>
@@ -69,7 +41,7 @@
             <p class="pc-stat-label">Jurnal Dibuat</p>
         </div>
 
-        <div class="dashboard-stat-card pc-stat-card pc-stat-card-amber">
+        <div class="pc-stat-card">
             <div class="flex items-start justify-between">
                 <div class="pc-stat-icon">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
@@ -83,7 +55,7 @@
 
     {{-- Chart + Activity --}}
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        <div class="lg:col-span-2 pc-card pc-panel-indigo p-6 flex flex-col h-[380px]">
+        <div class="lg:col-span-2 pc-card p-6 flex flex-col h-[380px]">
             <h3 class="pc-section-title mb-1">Tren Similarity</h3>
             <p class="text-xs mb-5" style="color: var(--pc-text-muted);">6 bulan terakhir</p>
             <div class="flex-1 relative min-h-0">
@@ -91,7 +63,7 @@
             </div>
         </div>
 
-        <div class="pc-card pc-panel-slate p-6 flex flex-col h-[380px]">
+        <div class="pc-card p-6 flex flex-col h-[380px]">
             <div class="flex items-center justify-between mb-5">
                 <h3 class="pc-section-title">Aktivitas Terakhir</h3>
                 <a href="{{ route('user.history.index') }}" class="pc-link text-xs">Semua</a>
@@ -121,7 +93,7 @@
         <div class="pc-card-header">
             <div>
                 <h3 class="pc-section-title">Pengecekan Terakhir</h3>
-                <p class="text-xs mt-0.5" style="color: var(--pc-text-muted);">Riwayat cek plagiarisme Anda</p>
+                <p class="text-xs mt-0.5" style="color: var(--pc-text-muted);">Riwayat cek plagiasi Anda</p>
             </div>
             <a href="{{ route('user.plagiarism.index') }}" class="pc-btn-secondary pc-btn-sm">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
@@ -182,7 +154,7 @@
                                         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                                     </div>
                                     <p class="text-sm">Belum ada pengecekan.</p>
-                                    <a href="{{ route('user.plagiarism.index') }}" class="pc-link text-sm mt-2">Mulai cek plagiarisme</a>
+                                    <a href="{{ route('user.plagiarism.index') }}" class="pc-link text-sm mt-2">Mulai cek plagiasi</a>
                                 </div>
                             </td>
                         </tr>
@@ -192,51 +164,6 @@
         </div>
     </div>
 @endsection
-
-@push('styles')
-<style>
-@media (max-width: 639px) {
-    .dashboard-stats-grid {
-        gap: 0.75rem;
-    }
-
-    .dashboard-stat-card {
-        min-width: 0;
-        padding: 0.875rem;
-    }
-
-    .dashboard-stat-card .pc-stat-icon {
-        width: 2.25rem;
-        height: 2.25rem;
-        border-radius: 0.75rem;
-    }
-
-    .dashboard-stat-card .pc-stat-icon svg {
-        width: 1rem;
-        height: 1rem;
-    }
-
-    .dashboard-stat-card .pc-badge-neutral {
-        padding: 0.2rem 0.45rem;
-        font-size: 0.6rem;
-        line-height: 1.15;
-    }
-
-    .dashboard-stat-card .pc-stat-value {
-        margin-top: 0.75rem;
-        font-size: 1.5rem;
-        line-height: 1.15;
-    }
-
-    .dashboard-stat-card .pc-stat-label {
-        min-height: 2rem;
-        margin-top: 0.35rem;
-        font-size: 0.6875rem;
-        line-height: 1.35;
-    }
-}
-</style>
-@endpush
 
 @push('scripts')
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>

@@ -1,12 +1,8 @@
-@extends($layout ?? 'layouts.user')
+@extends('layouts.user')
 
 @section('title', 'Perbaiki File')
 @section('page-title', 'Perbaikan File')
 @section('page-subtitle', 'Analisis dan turunkan tingkat plagiarisme dengan parafrase cerdas')
-
-@php
-    $routePrefix = str_starts_with(request()->route()?->getName() ?? '', 'admin.') ? 'admin' : 'user';
-@endphp
 
 @section('content')
 <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
@@ -20,10 +16,10 @@
                 <button type="button" @click="tab = 'upload'" class="pc-tab" :class="{ 'active': tab === 'upload' }">Upload Baru</button>
             </div>
 
-            <form x-show="tab === 'history'" action="{{ route($routePrefix . '.improvement.analyze') }}" method="POST" class="space-y-4">
+            <form x-show="tab === 'history'" action="{{ route('user.improvement.analyze') }}" method="POST" class="space-y-4">
                 @csrf
                 <div>
-                    <label class="pc-label">Pilih Hasil Cek Plagiarisme</label>
+                    <label class="pc-label">Pilih Hasil Cek Plagiasi</label>
                     @if($completedChecks->isEmpty())
                         <div class="p-4 rounded-xl text-sm text-center" style="background: var(--pc-bg-subtle); color: var(--pc-text-muted);">
                             Belum ada riwayat pengecekan selesai.
@@ -43,11 +39,11 @@
                     <div class="grid grid-cols-2 gap-2">
                         <label class="cursor-pointer">
                             <input type="radio" name="mode" value="manual" class="peer sr-only" checked>
-                            <div class="text-center p-3 text-sm font-semibold rounded-xl border-2 peer-checked:border-blue-500 peer-checked:bg-blue-50 dark:peer-checked:bg-blue-900/20 peer-checked:text-blue-700 dark:peer-checked:text-blue-300 transition-all" style="border-color: var(--pc-border);">Manual</div>
+                            <div class="text-center p-3 text-sm font-semibold rounded-xl border-2 peer-checked:border-indigo-500 peer-checked:bg-indigo-50 dark:peer-checked:bg-indigo-900/20 peer-checked:text-indigo-700 dark:peer-checked:text-indigo-300 transition-all" style="border-color: var(--pc-border);">Manual</div>
                         </label>
                         <label class="cursor-pointer">
                             <input type="radio" name="mode" value="automatic" class="peer sr-only">
-                            <div class="text-center p-3 text-sm font-semibold rounded-xl border-2 peer-checked:border-blue-500 peer-checked:bg-blue-50 dark:peer-checked:bg-blue-900/20 peer-checked:text-blue-700 dark:peer-checked:text-blue-300 transition-all" style="border-color: var(--pc-border);">Otomatis</div>
+                            <div class="text-center p-3 text-sm font-semibold rounded-xl border-2 peer-checked:border-indigo-500 peer-checked:bg-indigo-50 dark:peer-checked:bg-indigo-900/20 peer-checked:text-indigo-700 dark:peer-checked:text-indigo-300 transition-all" style="border-color: var(--pc-border);">Otomatis</div>
                         </label>
                     </div>
                 </div>
@@ -58,11 +54,11 @@
                 </button>
             </form>
 
-            <form x-show="tab === 'upload'" x-cloak action="{{ route($routePrefix . '.improvement.analyze') }}" method="POST" enctype="multipart/form-data" class="space-y-4">
+            <form x-show="tab === 'upload'" x-cloak action="{{ route('user.improvement.analyze') }}" method="POST" enctype="multipart/form-data" class="space-y-4">
                 @csrf
                 <div>
                     <label class="pc-label">Upload Dokumen</label>
-                    <input type="file" name="file" accept=".txt,.pdf,.docx" class="pc-input file:mr-3 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700" required>
+                    <input type="file" name="file" accept=".txt,.pdf,.docx" class="pc-input file:mr-3 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700" required>
                     <p class="text-xs mt-1" style="color: var(--pc-text-subtle);">PDF, DOCX, TXT — maks. 10MB</p>
                 </div>
 
@@ -71,11 +67,11 @@
                     <div class="grid grid-cols-2 gap-2">
                         <label class="cursor-pointer">
                             <input type="radio" name="mode" value="manual" class="peer sr-only" checked>
-                            <div class="text-center p-3 text-sm font-semibold rounded-xl border-2 peer-checked:border-blue-500 peer-checked:bg-blue-50 dark:peer-checked:bg-blue-900/20 transition-all" style="border-color: var(--pc-border);">Manual</div>
+                            <div class="text-center p-3 text-sm font-semibold rounded-xl border-2 peer-checked:border-indigo-500 peer-checked:bg-indigo-50 dark:peer-checked:bg-indigo-900/20 transition-all" style="border-color: var(--pc-border);">Manual</div>
                         </label>
                         <label class="cursor-pointer">
                             <input type="radio" name="mode" value="automatic" class="peer sr-only">
-                            <div class="text-center p-3 text-sm font-semibold rounded-xl border-2 peer-checked:border-blue-500 peer-checked:bg-blue-900/20 transition-all" style="border-color: var(--pc-border);">Otomatis</div>
+                            <div class="text-center p-3 text-sm font-semibold rounded-xl border-2 peer-checked:border-indigo-500 peer-checked:bg-indigo-900/20 transition-all" style="border-color: var(--pc-border);">Otomatis</div>
                         </label>
                     </div>
                 </div>
@@ -131,7 +127,7 @@
                                     @endif
                                 </td>
                                 <td class="text-right">
-                                    <a href="{{ route($routePrefix . '.improvement.show', $item->id) }}" class="pc-btn-soft pc-btn-sm">Lihat</a>
+                                    <a href="{{ route('user.improvement.show', $item->id) }}" class="pc-btn-soft pc-btn-sm">Lihat</a>
                                 </td>
                             </tr>
                         @empty

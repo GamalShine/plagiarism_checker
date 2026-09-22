@@ -2,10 +2,8 @@
 
 namespace App\Http\Controllers;
 
-use App\Jobs\ProcessPlagiarismCheck;
 use App\Models\Document;
 use App\Models\Link;
-use App\Models\PlagiarismCheck;
 use App\Services\HistoryService;
 use App\Services\PlagiarismService;
 use Illuminate\Http\RedirectResponse;
@@ -80,12 +78,13 @@ class GuestLinkController extends Controller
                 'mime_type' => $file->getMimeType(),
             ]);
 
-            $check = PlagiarismCheck::create([
-                'document_id' => $document->id,
-                'user_id' => $owner->id,
-                'status' => 'processing',
-                'sources_checked' => $request->input('sources'),
-            ]);
+            $check = $this->plagiarismService->check(
+                $document,
+                $request->input('sources'),
+                $settings
+            );
+
+            $document->update(['status' => 'completed']);
 
             $locked->update([
                 'is_used' => true,
@@ -96,14 +95,20 @@ class GuestLinkController extends Controller
                 'plagiarism_check_id' => $check->id,
             ]);
 
-            ProcessPlagiarismCheck::dispatch($check->id);
+            $this->historyService->logPlagiarismCheck(
+                $owner,
+                $check->id,
+                $document->title,
+                $check->total_similarity,
+                $request->input('sources')
+            );
 
             return $check;
         });
 
         return redirect()
             ->route('guest.link.result', [$token, $check->id])
-            ->with('success', 'Pengecekan plagiarisme berhasil. Link ini sudah tidak bisa dipakai lagi.');
+            ->with('success', 'Pengecekan plagiasi berhasil. Link ini sudah tidak bisa dipakai lagi.');
     }
 
     public function result(string $token, int $plagiarismCheckId): View

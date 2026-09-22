@@ -1,12 +1,8 @@
-@extends($layout ?? 'layouts.user')
+@extends('layouts.user')
 
 @section('title', 'Detail Perbaikan')
 @section('page-title', 'Tinjauan Perbaikan')
 @section('page-subtitle', $improvement->document->title ?? 'Dokumen')
-
-@php
-    $routePrefix = str_starts_with(request()->route()?->getName() ?? '', 'admin.') ? 'admin' : 'user';
-@endphp
 
 @section('content')
 <div x-data="improvementApp()">
@@ -19,7 +15,7 @@
         </div>
         
         @if($improvement->improved_content)
-        <a href="{{ route($routePrefix . '.improvement.download', $improvement->id) }}" class="pc-btn-primary w-full sm:w-auto">
+        <a href="{{ route('user.improvement.download', $improvement->id) }}" class="pc-btn-primary w-full sm:w-auto">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
             Unduh Hasil Perbaikan
         </a>
@@ -50,7 +46,7 @@
 
     @if(!$improvement->improved_content)
         <!-- Saran Perbaikan (Form) -->
-        <form action="{{ route($routePrefix . '.improvement.apply', $improvement->id) }}" method="POST" class="pc-card p-6">
+        <form action="{{ route('user.improvement.apply', $improvement->id) }}" method="POST" class="pc-card p-6">
             @csrf
             
             <div class="flex justify-between items-center mb-6 pb-4 border-b border-gray-200 dark:border-gray-800">

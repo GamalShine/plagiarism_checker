@@ -17,11 +17,6 @@ class AuthenticatedSessionController extends Controller
      */
     public function create(): View
     {
-        $packageKey = request()->query('package');
-        if ($packageKey && config("plans.{$packageKey}")) {
-            session(['selected_package' => $packageKey]);
-        }
-
         return view('auth.login');
     }
 
@@ -34,17 +29,7 @@ class AuthenticatedSessionController extends Controller
 
         $request->session()->regenerate();
 
-        $user = $request->user();
-
-        if ($user && $user->isAdmin()) {
-            return redirect()->route('admin.dashboard');
-        }
-
-        $packageKey = session()->pull('selected_package');
-
-        return $packageKey && config("plans.{$packageKey}")
-            ? redirect()->route('user.payment.package', $packageKey)
-            : redirect()->intended(HomeRoute::for($user));
+        return redirect()->intended(HomeRoute::for());
     }
 
     /**

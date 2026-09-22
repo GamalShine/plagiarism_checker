@@ -1,46 +1,51 @@
-@extends($layout ?? 'layouts.user')
+@extends('layouts.user')
 
-@section('title', 'Riwayat Cek Plagiarisme')
+@section('title', 'Riwayat Aktivitas')
 @section('page-title', 'History')
-@section('page-subtitle', 'Log aktivitas pengecekan plagiarisme Anda')
-
-@php
-    $routePrefix = str_starts_with(request()->route()?->getName() ?? '', 'admin.') ? 'admin' : 'user';
-@endphp
+@section('page-subtitle', 'Log lengkap semua aktivitas Anda')
 
 @section('content')
     <div class="pc-card overflow-hidden">
         <div class="pc-card-header flex justify-between items-center">
             <div>
-                <h3 class="pc-section-title">Aktivitas Cek Plagiarisme</h3>
+                <h3 class="pc-section-title">Semua Aktivitas</h3>
                 <p class="text-xs mt-0.5" style="color: var(--pc-text-muted);">{{ $histories->total() }} entri</p>
             </div>
-            <div id="deleteActionContainer" class="hidden items-center">
-                <button type="button" id="bulkDeleteBtn" class="px-3 py-1.5 bg-red-500 text-white rounded text-sm font-medium hover:bg-red-600 transition-colors" style="background-color: #ef4444;">Hapus Terpilih</button>
+            <div id="deleteActionContainer" class="hidden items-center space-x-3" style="gap: 1rem;">
+                <label class="flex items-center text-sm text-gray-600" style="color: var(--pc-text-subtle);">
+                    <input type="checkbox" name="delete_backend" value="1" form="historyBulkForm" class="rounded border-gray-300 mr-2">
+                    Hapus data backend juga
+                </label>
+                <button type="button" class="px-3 py-1.5 bg-red-500 text-white rounded text-sm font-medium hover:bg-red-600" style="background-color: #ef4444;" onclick="if(confirm('Yakin ingin menghapus riwayat yang dipilih?')) document.getElementById('historyBulkForm').submit()">Hapus Terpilih</button>
             </div>
         </div>
 
-        <form action="{{ route($routePrefix . '.history.destroyBulk') }}" method="POST" id="historyBulkForm">
+        <form action="{{ route('user.history.destroyBulk') }}" method="POST" id="historyBulkForm">
             @csrf
             @method('DELETE')
         <div class="pc-table-wrap">
             <table class="pc-table" style="width: 100%;">
                 <thead>
                     <tr>
-                        <th class="w-12 text-center" style="width: 3rem;">No</th>
-                        <th>Aktivitas</th>
-                        <th>Detail</th>
-                        <th class="text-right">Waktu</th>
                         <th class="w-12 text-center" style="width: 3rem;">
                             <input type="checkbox" id="selectAll" class="rounded border-gray-300">
                         </th>
+                        <th class="w-16 text-center">Tipe</th>
+                        <th>Aktivitas</th>
+                        <th>Detail</th>
+                        <th class="text-right">Waktu</th>
                     </tr>
                 </thead>
                 <tbody>
                     @forelse($histories as $history)
                         <tr>
-                            <td class="text-center text-sm font-semibold" style="color: var(--pc-text-muted);">
-                                {{ $histories->firstItem() + $loop->index }}
+                            <td class="text-center">
+                                <input type="checkbox" name="ids[]" value="{{ $history->id }}" class="history-checkbox rounded border-gray-300">
+                            </td>
+                            <td>
+                                <div class="w-10 h-10 rounded-xl mx-auto flex items-center justify-center border text-lg" style="background-color: {{ $history->color }}12; color: {{ $history->color }}; border-color: {{ $history->color }}25">
+                                    {{ $history->icon }}
+                                </div>
                             </td>
                             <td>
                                 <div class="font-medium max-w-md line-clamp-2">{{ $history->description }}</div>
@@ -48,11 +53,11 @@
                             </td>
                             <td class="text-sm">
                                 @if($history->activity_type === 'plagiarism_check' && isset($history->metadata['check_id']))
-                                    <a href="{{ route($routePrefix . '.plagiarism.result', $history->metadata['check_id']) }}" class="pc-link">Lihat Hasil Plagiarisme</a>
+                                    <a href="{{ route('user.plagiarism.result', $history->metadata['check_id']) }}" class="pc-link">Lihat Hasil Plagiasi</a>
                                 @elseif($history->activity_type === 'journal_generate' && isset($history->metadata['journal_id']))
-                                    <a href="{{ route($routePrefix . '.journal.show', $history->metadata['journal_id']) }}" class="pc-link">Lihat Jurnal</a>
+                                    <a href="{{ route('user.journal.show', $history->metadata['journal_id']) }}" class="pc-link">Lihat Jurnal</a>
                                 @elseif($history->activity_type === 'improvement' && isset($history->metadata['improvement_id']))
-                                    <a href="{{ route($routePrefix . '.improvement.show', $history->metadata['improvement_id']) }}" class="pc-link" style="color: var(--pc-accent);">Lihat Perbaikan</a>
+                                    <a href="{{ route('user.improvement.show', $history->metadata['improvement_id']) }}" class="pc-link" style="color: var(--pc-accent);">Lihat Perbaikan</a>
                                 @else
                                     <span style="color: var(--pc-text-subtle);">—</span>
                                 @endif
@@ -60,9 +65,6 @@
                             <td class="text-right">
                                 <div class="text-sm font-medium">{{ $history->created_at->format('d M Y') }}</div>
                                 <div class="text-xs" style="color: var(--pc-text-subtle);">{{ $history->created_at->format('H:i') }}</div>
-                            </td>
-                            <td class="text-center">
-                                <input type="checkbox" name="ids[]" value="{{ $history->id }}" class="history-checkbox rounded border-gray-300">
                             </td>
                         </tr>
                     @empty
@@ -94,9 +96,7 @@
             const selectAll = document.getElementById('selectAll');
             const checkboxes = document.querySelectorAll('.history-checkbox');
             const deleteActionContainer = document.getElementById('deleteActionContainer');
-            const bulkDeleteBtn = document.getElementById('bulkDeleteBtn');
-            const bulkForm = document.getElementById('historyBulkForm');
-
+            
             function updateDeleteButton() {
                 const checkedCount = document.querySelectorAll('.history-checkbox:checked').length;
                 if (checkedCount > 0) {
@@ -106,36 +106,6 @@
                     deleteActionContainer.classList.add('hidden');
                     deleteActionContainer.classList.remove('flex');
                 }
-            }
-
-            if (bulkDeleteBtn && bulkForm) {
-                bulkDeleteBtn.addEventListener('click', function () {
-                    const checked = document.querySelectorAll('.history-checkbox:checked').length;
-                    if (!checked) {
-                        Swal.fire({
-                            icon: 'info',
-                            title: 'Belum ada yang dipilih',
-                            text: 'Pilih minimal satu riwayat untuk dihapus.',
-                            confirmButtonText: 'OK'
-                        });
-                        return;
-                    }
-
-                    Swal.fire({
-                        icon: 'warning',
-                        title: 'Hapus riwayat terpilih?',
-                        text: 'Tindakan ini akan menghapus entri yang dipilih secara permanen.',
-                        showCancelButton: true,
-                        confirmButtonColor: '#dc2626',
-                        cancelButtonColor: '#64748b',
-                        confirmButtonText: 'Ya, hapus',
-                        cancelButtonText: 'Batal'
-                    }).then((result) => {
-                        if (result.isConfirmed) {
-                            bulkForm.submit();
-                        }
-                    });
-                });
             }
 
             if (selectAll) {

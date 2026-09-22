@@ -6,7 +6,7 @@
 
 @section('content')
 <div class="space-y-6">
-    <div class="grid grid-cols-2 gap-4 xl:grid-cols-4">
+    <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         <div class="pc-card p-5">
             <p class="text-sm" style="color: var(--pc-text-muted);">Total Pengguna</p>
             <p class="text-3xl font-bold mt-1">{{ $stats['users'] }}</p>

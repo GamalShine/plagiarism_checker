@@ -12,67 +12,29 @@ function normalize(value) {
     return String(value ?? '').replace(/\s+/g, ' ').trim().toLowerCase();
 }
 
-function searchVariants(value) {
-    const original = String(value ?? '').replace(/\s+/g, ' ').trim();
-    const words = original.split(' ').filter((word) => word.length > 2);
-    const variants = [original];
-
-    if (words.length >= 4) {
-        variants.push(words.slice(0, 6).join(' '));
-        if (words.length >= 10) {
-            variants.push(words.slice(4, 10).join(' '));
-        }
-    }
-
-    return [...new Set(variants.filter((variant) => variant.length >= 4))];
-}
-
 function color(value) {
     const match = String(value ?? '').trim().match(/^#?([0-9a-f]{6})$/i);
-    if (!match) return { fill: rgb(0, 0, 0), transparent: true };
+    if (!match) return rgb(1, 0.82, 0.1);
     const hex = match[1];
-    return {
-        fill: rgb(
-            Number.parseInt(hex.slice(0, 2), 16) / 255,
-            Number.parseInt(hex.slice(2, 4), 16) / 255,
-            Number.parseInt(hex.slice(4, 6), 16) / 255,
-        ),
-        transparent: false,
-    };
-}
-
-function boxesForRange(items, start, end) {
-    const verticalOffset = 1.5;
-
-    return items
-        .filter((item) => item.end > start && item.start < end)
-        .map((item) => {
-            const overlapStart = Math.max(start, item.start);
-            const overlapEnd = Math.min(end, item.end);
-            const itemLength = Math.max(item.end - item.start, 1);
-            const startRatio = (overlapStart - item.start) / itemLength;
-            const endRatio = (overlapEnd - item.start) / itemLength;
-            const x = item.x + item.width * startRatio;
-            const width = Math.max(item.width * (endRatio - startRatio), 1);
-
-            return {
-                x,
-                y: item.y - verticalOffset,
-                width,
-                height: item.height,
-            };
-        });
+    return rgb(
+        Number.parseInt(hex.slice(0, 2), 16) / 255,
+        Number.parseInt(hex.slice(2, 4), 16) / 255,
+        Number.parseInt(hex.slice(4, 6), 16) / 255,
+    );
 }
 
 async function readPageMatches(sourceBytes, highlights, maxPages) {
     const pdf = await getDocument({ data: new Uint8Array(sourceBytes) }).promise;
     const matches = [];
-    const searchableHighlights = highlights
-        .flatMap((highlight) => searchVariants(highlight.text).map((variant) => ({
-            ...highlight,
-            normalizedText: normalize(variant),
-        })))
-        .filter((highlight) => highlight.normalizedText.length >= 4);
+    const searchableHighlights = [...new Map(
+        highlights
+            .map((highlight) => ({
+                ...highlight,
+                normalizedText: normalize(highlight.text),
+            }))
+            .filter((highlight) => highlight.normalizedText.length >= 4)
+            .map((highlight) => [highlight.normalizedText, highlight]),
+    ).values()];
     const pageCount = Math.min(pdf.numPages, maxPages);
 
     for (let pageNumber = 1; pageNumber <= pageCount; pageNumber += 1) {
@@ -109,21 +71,25 @@ async function readPageMatches(sourceBytes, highlights, maxPages) {
         for (const highlight of searchableHighlights) {
             const needle = highlight.normalizedText;
 
-            let start = normalizedPage.indexOf(needle);
-            while (start >= 0) {
-                const end = start + needle.length;
-                const boxes = boxesForRange(items, start, end);
+            const start = normalizedPage.indexOf(needle);
+            if (start < 0) continue;
+            const end = start + needle.length;
+            const boxes = items
+                .filter((item) => item.end > start && item.start < end)
+                .map((item) => ({
+                    x: item.x,
+                    y: item.y,
+                    width: item.width,
+                    height: item.height,
+                }));
 
-                if (boxes.length > 0) {
-                    matches.push({
-                        pageNumber,
-                        boxes,
-                        color: highlight.color || '#84CC16',
-                        sourceIndex: Number.parseInt(highlight.source_index, 10) || 0,
-                    });
-                }
-
-                start = normalizedPage.indexOf(needle, start + Math.max(needle.length, 1));
+            if (boxes.length > 0) {
+                matches.push({
+                    pageNumber,
+                    boxes,
+                    color: highlight.color,
+                    sourceIndex: Number.parseInt(highlight.source_index, 10) || 0,
+                });
             }
         }
     }
@@ -177,9 +143,7 @@ async function main() {
         for (const match of matches) {
             const page = sourcePages[match.pageNumber - 1];
             if (!page) continue;
-            const parsedColor = color(match.color);
-            if (parsedColor.transparent) continue;
-            const fill = parsedColor.fill;
+            const fill = color(match.color);
             for (const box of match.boxes) {
                 page.drawRectangle({
                     x: box.x,
