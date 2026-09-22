@@ -1,32 +1,76 @@
 <!DOCTYPE html>
-<html lang="id" x-data="{ isDark: localStorage.getItem('plagcheck_dark_mode') === 'true' }" :class="{ 'dark': isDark }" class="scroll-smooth">
+<html lang="id" x-data="{ isDark: localStorage.getItem('naskahcek_dark_mode') === 'true' }" :class="{ 'dark': isDark }" class="scroll-smooth">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>@yield('title', 'Cek Plagiasi') — PlagCheck Pro</title>
+    <meta name="theme-color" content="#0d1b3d">
+    <title>@yield('title', 'Cek Plagiarisme') — NaskahCek</title>
+    <link rel="icon" type="image/png" href="{{ asset('images/naskahceklogo.png') }}">
+    <link rel="shortcut icon" href="{{ asset('images/naskahceklogo.png') }}">
+    <link rel="apple-touch-icon" href="{{ asset('images/naskahceklogo.png') }}">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     <style>[x-cloak]{display:none!important}</style>
 </head>
 <body class="font-sans antialiased pc-app-bg min-h-screen">
+    <div class="promo-marquee-wrapper">
+        <div class="promo-marquee-track">
+            <span>Promo Launching: Cek plagiarisme lebih cepat dengan analisis mendalam dan aman</span>
+            <span>•</span>
+            <span>Diskon khusus untuk mahasiswa, dosen, dan peneliti</span>
+            <span>•</span>
+            <span>Gratis review awal untuk naskah akademik yang ingin diperbaiki</span>
+            <span>•</span>
+            <span>Promo Launching: Cek plagiarisme lebih cepat dengan analisis mendalam dan aman</span>
+            <span>•</span>
+            <span>Diskon khusus untuk mahasiswa, dosen, dan peneliti</span>
+            <span>•</span>
+            <span>Gratis review awal untuk naskah akademik yang ingin diperbaiki</span>
+        </div>
+    </div>
+    <style>
+        .promo-marquee-wrapper {
+            position: sticky;
+            top: 0;
+            z-index: 40;
+            overflow: hidden;
+            background: #1e3a8a;
+            color: #ffffff;
+            border-bottom: 1px solid rgba(255,255,255,0.08);
+        }
+        .promo-marquee-track {
+            display: flex;
+            align-items: center;
+            gap: 1.5rem;
+            white-space: nowrap;
+            min-width: max-content;
+            width: max-content;
+            padding: 0.6rem 0;
+            font-size: 0.75rem;
+            font-weight: 400;
+            letter-spacing: 0.02em;
+            animation: promo-marquee 20s linear infinite;
+        }
+        .promo-marquee-track span { display: inline-block; }
+        @keyframes promo-marquee {
+            from { transform: translateX(0); }
+            to { transform: translateX(-50%); }
+        }
+    </style>
     <header class="border-b" style="border-color: var(--pc-border); background: var(--pc-surface);">
         <div class="max-w-5xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
             <div class="flex items-center gap-3">
-                <div class="pc-logo-mark w-9 h-9">
-                    <svg class="w-4 h-4 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
-                    </svg>
-                </div>
+                <img src="{{ asset('images/naskahceklogo.png') }}" alt="NaskahCek logo" class="h-9 w-9 rounded-lg object-cover bg-white ring-1 ring-slate-200 shadow-sm" />
                 <div>
-                    <h1 class="text-base font-bold leading-none" style="color: var(--pc-text);">PlagCheck Pro</h1>
+                    <h1 class="text-base font-bold leading-none" style="color: var(--pc-text);">NaskahCek</h1>
                     <p class="text-xs mt-1" style="color: var(--pc-text-muted);">Akses Tamu — Sekali Pakai</p>
                 </div>
             </div>
             <button type="button" class="pc-btn-soft pc-btn-sm"
-                    @click="isDark = !isDark; localStorage.setItem('plagcheck_dark_mode', isDark); isDark ? document.documentElement.classList.add('dark') : document.documentElement.classList.remove('dark')">
+                    @click="isDark = !isDark; localStorage.setItem('naskahcek_dark_mode', isDark); isDark ? document.documentElement.classList.add('dark') : document.documentElement.classList.remove('dark')">
                 Tema
             </button>
         </div>

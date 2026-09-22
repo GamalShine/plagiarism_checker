@@ -60,7 +60,7 @@
                     <li class="t-source-item" title="{{ $source->title }}">
                         <div class="t-source-color-bar" style="background-color: {{ $source->color_code }};"></div>
                         <div class="t-source-content">
-                            <div class="t-source-percent" style="color: {{ $source->color_code }};">{{ $source->similarity_score }}%</div>
+                            <div class="t-source-percent" style="color: {{ $source->color_code }};">{{ $source->turnitin_percentage }}</div>
                             <div class="t-source-details">
                                 <div class="t-source-title">
                                     <span class="inline-block px-1.5 py-0.5 text-[10px] font-bold text-white rounded mr-1" style="background-color: {{ $source->color_code }};">{{ $source->turnitin_index }}</span>

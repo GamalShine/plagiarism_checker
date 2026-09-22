@@ -58,6 +58,117 @@ class DocumentPageRenderer
         return is_file($cachedPdf) ? $cachedPdf : $pdfPath;
     }
 
+    public function resolveSourcePdfWithoutShell(string $filePath, int $documentId, array $highlights = []): ?string
+    {
+        if (! is_file($filePath)) {
+            return null;
+        }
+
+        $extension = strtolower(pathinfo($filePath, PATHINFO_EXTENSION));
+        if ($extension === 'pdf') {
+            return $filePath;
+        }
+
+        if ($extension !== 'docx') {
+            return null;
+        }
+
+        $cacheDir = $this->cacheDirectory($documentId, $filePath);
+        $highlightedCacheKey = md5(json_encode(array_map(
+            fn ($highlight) => [
+                'text' => (string) ($highlight->original_text ?? ''),
+                'color' => (string) ($highlight->color_code ?? $highlight->source?->color_code ?? 'transparent'),
+            ],
+            $highlights,
+        ),
+            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES,
+        ) . '|highlight-render-v4');
+        $cachedPdf = $highlights !== []
+            ? $cacheDir . DIRECTORY_SEPARATOR . 'highlighted-source-' . $highlightedCacheKey . '.pdf'
+            : $cacheDir . DIRECTORY_SEPARATOR . 'phpword-source.pdf';
+
+        if (is_file($cachedPdf) && filesize($cachedPdf) > 0) {
+            return $cachedPdf;
+        }
+
+        File::ensureDirectoryExists($cacheDir);
+
+        $pdfPath = null;
+        if (function_exists('shell_exec')) {
+            if (PHP_OS_FAMILY === 'Windows' && $highlights !== []) {
+                $pdfPath = $this->convertDocxWithWordHighlights($filePath, $cacheDir, $highlights);
+                if ($pdfPath) {
+                    if ($pdfPath !== $cachedPdf) {
+                        @copy($pdfPath, $cachedPdf);
+                    }
+
+                    return is_file($cachedPdf) ? $cachedPdf : $pdfPath;
+                }
+
+                return null;
+            }
+
+            foreach ([
+                fn () => $this->convertDocxWithMicrosoftWord($filePath, $cacheDir),
+                fn () => $this->convertDocxWithLibreOffice($filePath, $cacheDir),
+                fn () => $this->convertDocxWithBrowser($filePath, $cacheDir),
+            ] as $convert) {
+                $pdfPath = $convert();
+                if ($pdfPath) {
+                    break;
+                }
+            }
+        }
+
+        $pdfPath ??= $this->convertDocxWithPhpWord($filePath, $cacheDir);
+
+        if ($pdfPath && $pdfPath !== $cachedPdf && is_file($pdfPath)) {
+            @copy($pdfPath, $cachedPdf);
+        }
+
+        return is_file($cachedPdf) && filesize($cachedPdf) > 0 ? $cachedPdf : null;
+    }
+
+    private function convertDocxWithWordHighlights(string $filePath, string $cacheDir, array $highlights): ?string
+    {
+        $script = base_path('scripts/docx_to_highlighted_pdf.ps1');
+        if (! is_file($script)) {
+            return null;
+        }
+
+        $outputPath = $cacheDir . DIRECTORY_SEPARATOR . 'highlighted-source.pdf';
+        $highlightsPath = $cacheDir . DIRECTORY_SEPARATOR . 'highlights.json';
+        @unlink($outputPath);
+        file_put_contents($highlightsPath, json_encode(array_map(
+            fn ($highlight) => [
+                'text' => $highlight->original_text,
+                'color' => $highlight->color_code ?? $highlight->source?->color_code ?? 'transparent',
+            ],
+            $highlights,
+        ), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+
+        $command = sprintf(
+            'powershell -NoProfile -ExecutionPolicy Bypass -File %s -InputPath %s -OutputPath %s -HighlightsPath %s 2>&1',
+            escapeshellarg($script),
+            escapeshellarg($filePath),
+            escapeshellarg($outputPath),
+            escapeshellarg($highlightsPath),
+        );
+
+        $output = shell_exec($command);
+        if (is_file($outputPath) && filesize($outputPath) > 0) {
+            return $outputPath;
+        }
+
+        Log::warning('DOCX highlight conversion failed', [
+            'file' => $filePath,
+            'highlight_count' => count($highlights),
+            'output' => $output,
+        ]);
+
+        return null;
+    }
+
     private function renderPdfPages(string $pdfPath, int $documentId, string $originalFilePath): array
     {
         $cacheDir = $this->cacheDirectory($documentId, $originalFilePath);
@@ -91,7 +202,7 @@ class DocumentPageRenderer
             (string) $dpi,
             (string) $jpegQuality,
             'native-v2',
-            'word-v1',
+            'word-v2-colored-highlights',
         ]));
 
         return Storage::disk('local')->path("document-previews/{$documentId}/{$hash}");
@@ -128,7 +239,7 @@ class DocumentPageRenderer
 
     private function convertDocxWithMicrosoftWord(string $filePath, string $cacheDir): ?string
     {
-        if (PHP_OS_FAMILY !== 'Windows') {
+        if (PHP_OS_FAMILY !== 'Windows' || ! function_exists('shell_exec')) {
             return null;
         }
 
@@ -165,6 +276,10 @@ class DocumentPageRenderer
 
     private function convertDocxWithLibreOffice(string $filePath, string $cacheDir): ?string
     {
+        if (! function_exists('shell_exec')) {
+            return null;
+        }
+
         $binary = $this->findLibreOfficeBinary();
         if (!$binary) {
             return null;
@@ -220,6 +335,10 @@ class DocumentPageRenderer
 
     private function convertDocxWithBrowser(string $filePath, string $cacheDir): ?string
     {
+        if (! function_exists('shell_exec')) {
+            return null;
+        }
+
         $browser = $this->findBrowserBinary();
         if (!$browser) {
             return null;
@@ -268,6 +387,10 @@ class DocumentPageRenderer
 
     private function convertPdfWithPython(string $pdfPath, string $cacheDir): array
     {
+        if (! function_exists('shell_exec')) {
+            return [];
+        }
+
         $python = $this->findPythonBinary();
         $script = base_path('scripts/pdf_to_images.py');
 
@@ -332,6 +455,10 @@ class DocumentPageRenderer
 
     private function convertPdfWithPdftoppm(string $pdfPath, string $cacheDir): array
     {
+        if (! function_exists('shell_exec')) {
+            return [];
+        }
+
         $binary = $this->findPdftoppmBinary();
         if (!$binary) {
             return [];
@@ -366,6 +493,10 @@ class DocumentPageRenderer
             env('PYTHON_PATH'),
             'C:\\laragon\\bin\\python\\python-3.13\\python.exe',
             'C:\\laragon\\bin\\python\\python-3.12\\python.exe',
+            base_path('.venv/bin/python'),
+            base_path('venv/bin/python'),
+            '/usr/bin/python3',
+            '/usr/local/bin/python3',
             'python3',
             'python',
         ]);

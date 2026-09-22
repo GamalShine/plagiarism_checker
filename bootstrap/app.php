@@ -12,8 +12,15 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->trustProxies(at: '*');
+
         $middleware->alias([
             'admin' => \App\Http\Middleware\EnsureUserIsAdmin::class,
+            'package.payment' => \App\Http\Middleware\EnsurePackagePaymentCompleted::class,
+        ]);
+
+        $middleware->validateCsrfTokens(except: [
+            'payment/notification',
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
