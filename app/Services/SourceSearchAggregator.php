@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\UserSetting;
 use Illuminate\Http\Client\Pool;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -38,6 +39,22 @@ class SourceSearchAggregator
     ) {}
 
     public function searchAll(string $query, array $selectedSources = [], ?UserSetting $settings = null): array
+    {
+        $cacheKey = 'plagiarism:search:' . sha1(json_encode([
+            mb_substr($query, 0, 150),
+            $selectedSources,
+            $settings?->id,
+            $settings?->elsevier_enabled,
+            hash('sha256', (string) $settings?->serpapi_key),
+            hash('sha256', (string) $settings?->elsevier_api_key),
+        ], JSON_THROW_ON_ERROR));
+
+        return Cache::remember($cacheKey, now()->addMinutes(10), function () use ($query, $selectedSources, $settings): array {
+            return $this->searchAllUncached($query, $selectedSources, $settings);
+        });
+    }
+
+    private function searchAllUncached(string $query, array $selectedSources = [], ?UserSetting $settings = null): array
     {
         $query = mb_substr($query, 0, 150);
         $results = [];
@@ -88,11 +105,11 @@ class SourceSearchAggregator
 
             $pool->as('openalex')
                 ->timeout(self::TIMEOUT)
-                ->withHeaders(['User-Agent' => 'PlagCheckPro/1.0 (mailto:admin@plagcheck.test)'])
+                ->withHeaders(['User-Agent' => 'NaskahCekPro/1.0 (mailto:admin@naskahcek.test)'])
                 ->get('https://api.openalex.org/works', [
                     'search' => $query,
                     'per_page' => self::RESULT_LIMIT,
-                    'mailto' => 'checker@plagcheck.test',
+                    'mailto' => 'checker@naskahcek.test',
                 ]);
 
             $searchQuery = urlencode($query);
@@ -102,7 +119,7 @@ class SourceSearchAggregator
 
             $pool->as('crossref')
                 ->timeout(self::TIMEOUT)
-                ->withHeaders(['User-Agent' => 'PlagCheckPro/1.0 (mailto:admin@plagcheck.test)'])
+                ->withHeaders(['User-Agent' => 'NaskahCekPro/1.0 (mailto:admin@naskahcek.test)'])
                 ->get('https://api.crossref.org/works', [
                     'query' => $query,
                     'rows' => self::RESULT_LIMIT,
@@ -110,7 +127,7 @@ class SourceSearchAggregator
 
             $pool->as('crossref_posted')
                 ->timeout(self::TIMEOUT)
-                ->withHeaders(['User-Agent' => 'PlagCheckPro/1.0 (mailto:admin@plagcheck.test)'])
+                ->withHeaders(['User-Agent' => 'NaskahCekPro/1.0 (mailto:admin@naskahcek.test)'])
                 ->get('https://api.crossref.org/works', [
                     'query' => $query,
                     'rows' => self::RESULT_LIMIT,

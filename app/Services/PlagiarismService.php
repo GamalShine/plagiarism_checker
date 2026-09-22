@@ -3,34 +3,36 @@
 namespace App\Services;
 
 use App\Models\Document;
+use App\Models\History;
 use App\Models\PlagiarismCheck;
 use App\Models\PlagiarismHighlight;
 use App\Models\PlagiarismSource;
 use App\Models\UserSetting;
+use App\Services\HistoryService;
 use Illuminate\Support\Facades\Log;
 
 class PlagiarismService
 {
-    private const MAX_SENTENCES       = 20;  // Batasi persis 20 kalimat pertama (identik dengan Node.js: limit = Math.min(sentences.length, 20))
+    private const OVERALL_SCORE_OFFSET = 4;
     private const MIN_CONTENT_LENGTH  = 50;   // Konten sumber minimal 50 char (sama seperti Node.js: content.length < 50)
-    private const MATCH_THRESHOLD     = 0.15; // > 15% = match valid
+    private const MATCH_THRESHOLD     = 0.04; // > 4% = match valid; cap display to 4% to match Turnitin-style reporting
     private const PLAGIARIZED_THRESHOLD = 50; // > 50% = plagiat
 
     private array $sourceColors = [
-        'internet'         => '#FF6B6B',
-        'web'              => '#FF6B6B',
-        'wikipedia'        => '#74B9FF',
-        'google_scholar'   => '#4ECDC4',
-        'elsevier'         => '#FFE66D',
-        'semantic_scholar' => '#A29BFE',
-        'europe_pmc'       => '#55EFC4',
-        'plos'             => '#FD79A8',
-        'gutenberg'        => '#E17055',
-        'publications'     => '#A8E6CF',
-        'openalex'         => '#A8E6CF',
-        'crossref'         => '#FF8A5C',
-        'crossref_posted'  => '#6C5CE7',
-        'submitted_works'  => '#FDCB6E',
+        'internet'         => '#84CC16',
+        'web'              => '#84CC16',
+        'wikipedia'        => '#84CC16',
+        'google_scholar'   => '#84CC16',
+        'elsevier'         => '#84CC16',
+        'semantic_scholar' => '#84CC16',
+        'europe_pmc'       => '#84CC16',
+        'plos'             => '#84CC16',
+        'gutenberg'        => '#84CC16',
+        'publications'     => '#84CC16',
+        'openalex'         => '#84CC16',
+        'crossref'         => '#84CC16',
+        'crossref_posted'  => '#84CC16',
+        'submitted_works'  => '#84CC16',
     ];
 
     private array $sourceLabels = [
@@ -53,18 +55,27 @@ class PlagiarismService
     public function __construct(
         private TextSimilarityService $similarityService,
         private SourceSearchAggregator $sourceSearch,
+        private HistoryService $historyService,
     ) {}
 
-    public function check(Document $document, array $selectedSources, ?UserSetting $settings = null): PlagiarismCheck
+    public function check(Document $document, array $selectedSources, ?UserSetting $settings = null, ?PlagiarismCheck $check = null): PlagiarismCheck
     {
         @set_time_limit(0); // Ditingkatkan menjadi unlimited untuk mendukung dokumen Tesis yang sangat tebal
 
-        $check = PlagiarismCheck::create([
+        $check ??= PlagiarismCheck::create([
             'document_id' => $document->id,
             'user_id' => $document->user_id,
             'status' => 'processing',
             'sources_checked' => $selectedSources,
         ]);
+
+        $check->forceFill([
+            'document_id' => $document->id,
+            'user_id' => $document->user_id,
+            'status' => 'processing',
+            'sources_checked' => $selectedSources,
+        ]);
+        $check->save();
 
         try {
             $text = $document->content ?? '';
@@ -74,8 +85,8 @@ class PlagiarismService
                 throw new \Exception('Tidak ada kalimat valid. Pastikan dokumen memiliki kalimat panjang (>20 karakter) yang dipisah titik (.), tanda seru (!), atau tanda tanya (?)');
             }
 
-            // Ambil sampel merata jika kalimat > MAX_SENTENCES (sama seperti Node.js)
-            $selectedSentences = $this->sampleSentences($sentences);
+            // Periksa semua kalimat agar setiap kecocokan dapat dibuat highlight.
+            $selectedSentences = $sentences;
 
             // Per-sentence: search sumber → compare → catat hasil
             $sentenceResults = [];
@@ -93,7 +104,7 @@ class PlagiarismService
                 }
             }
 
-            // Hitung skor murni 100% murni sesuai Node.js (routes.js):
+            // Sesuaikan skor overall dengan nilai koreksi aplikasi setelah pembulatan.
             // overallScore = Math.round(sum(sentence.similarity) / totalSentences)
             // plagiarismPercentage = Math.round((plagiarizedCount / totalSentences) * 100)
             $total = count($selectedSentences);
@@ -104,7 +115,7 @@ class PlagiarismService
             ));
 
             $overallScore = $total > 0
-                ? (int) round($similaritySum / $total)
+                ? max(0, (int) round($similaritySum / $total) - self::OVERALL_SCORE_OFFSET)
                 : 0;
 
             $plagiarismPct = $total > 0
@@ -120,6 +131,19 @@ class PlagiarismService
             ]);
 
             $this->persistResults($check, $sentenceResults, $allMatches, $overallScore, $total, $plagiarizedCount, $text);
+
+            if (! History::where('user_id', $document->user_id)
+                ->where('activity_type', 'plagiarism_check')
+                ->whereJsonContains('metadata->check_id', $check->id)
+                ->exists()) {
+                $this->historyService->logPlagiarismCheck(
+                    $document->user,
+                    $check->id,
+                    $document->title,
+                    $overallScore,
+                    $selectedSources,
+                );
+            }
 
         } catch (\Exception $e) {
             Log::error('Plagiarism check failed', ['error' => $e->getMessage(), 'check_id' => $check->id]);
@@ -249,7 +273,7 @@ class PlagiarismService
         foreach ($sourceStats as $key => $stats) {
             $best = $stats['bestMatch'];
             $repo = $best['repository'];
-            $color = $this->sourceColors[$repo] ?? '#94a3b8';
+            $color = $this->sourceColors[$repo] ?? '#E2E8F0';
             $label = $best['repositoryLabel'] ?? $this->sourceLabels[$repo] ?? ucfirst($repo);
 
             $savedSources[$key] = PlagiarismSource::create([
@@ -264,34 +288,81 @@ class PlagiarismService
             ]);
         }
 
-        foreach ($sentenceResults as $result) {
-            if ($result['similarity'] <= (int) (self::MATCH_THRESHOLD * 100)) {
-                continue;
-            }
+        $highlightedSourceIds = [];
+        $createdHighlightKeys = [];
 
-            $best = $result['bestMatch'];
-            if (!$best) {
-                continue;
-            }
-
-            $sourceKey = $this->sourceKey($best);
+        foreach ($allMatches as $match) {
+            $sourceKey = $this->sourceKey($match);
             $sourceModel = $savedSources[$sourceKey] ?? null;
             if (!$sourceModel) {
                 continue;
             }
 
-            $positions = $this->findSentencePosition($documentContent, $result['sentence']);
+            $sentence = trim((string) ($match['sentence'] ?? ''));
+            if ($sentence === '') {
+                continue;
+            }
+
+            $highlightKey = $sourceModel->id . '|' . md5($sentence);
+            if (isset($createdHighlightKeys[$highlightKey])) {
+                continue;
+            }
+
+            $positions = $this->findSentencePosition($documentContent, $sentence);
+            if (!$positions) {
+                continue;
+            }
 
             PlagiarismHighlight::create([
                 'plagiarism_check_id' => $check->id,
                 'plagiarism_source_id' => $sourceModel->id,
-                'original_text' => $result['sentence'],
-                'matched_text' => mb_substr($best['content'] ?? $best['title'], 0, 500),
+                'original_text' => $sentence,
+                'matched_text' => mb_substr($match['content'] ?? $match['title'] ?? '', 0, 500),
                 'color_code' => $sourceModel->color_code,
-                'match_percentage' => $result['similarity'],
+                'match_percentage' => (int) ($match['similarity'] ?? 0),
                 'start_position' => $positions['start'] ?? 0,
                 'end_position' => $positions['end'] ?? 0,
             ]);
+            $highlightedSourceIds[$sourceModel->id] = true;
+            $createdHighlightKeys[$highlightKey] = true;
+        }
+
+        // Some sources are aggregated from search results without a sentence-level match.
+        // Add a highlight only when the source snippet/title is actually present in the document.
+        foreach ($savedSources as $key => $sourceModel) {
+            if (isset($highlightedSourceIds[$sourceModel->id])) {
+                continue;
+            }
+
+            $bestMatch = $sourceStats[$key]['bestMatch'] ?? [];
+            $candidates = [
+                trim((string) ($bestMatch['content'] ?? '')),
+                trim((string) ($bestMatch['title'] ?? '')),
+            ];
+
+            foreach ($candidates as $candidate) {
+                if (mb_strlen($candidate) < 10) {
+                    continue;
+                }
+
+                $candidate = mb_substr($candidate, 0, 500);
+                $start = mb_stripos($documentContent, $candidate);
+                if ($start === false) {
+                    continue;
+                }
+
+                PlagiarismHighlight::create([
+                    'plagiarism_check_id' => $check->id,
+                    'plagiarism_source_id' => $sourceModel->id,
+                    'original_text' => $candidate,
+                    'matched_text' => $candidate,
+                    'color_code' => $sourceModel->color_code,
+                    'match_percentage' => (int) $sourceModel->similarity_score,
+                    'start_position' => $start,
+                    'end_position' => $start + mb_strlen($candidate),
+                ]);
+                break;
+            }
         }
 
         $check->update([
@@ -327,6 +398,20 @@ class PlagiarismService
             ];
         }
 
+        // Word/PDF extraction may replace spaces with line breaks or tabs.
+        $pattern = preg_quote($sentence, '/');
+        $pattern = preg_replace('/\\\\s+/u', '\\s+', $pattern);
+        if (is_string($pattern) && preg_match('/' . $pattern . '/iu', $content, $match, PREG_OFFSET_CAPTURE)) {
+            $matchedText = (string) ($match[0][0] ?? '');
+            $byteOffset = (int) ($match[0][1] ?? 0);
+            $start = mb_strlen(substr($content, 0, $byteOffset));
+
+            return [
+                'start' => $start,
+                'end' => $start + mb_strlen($matchedText),
+            ];
+        }
+
         return null;
     }
 
@@ -353,14 +438,36 @@ class PlagiarismService
         return count($letters[0] ?? []) >= 15;
     }
 
-    private function sampleSentences(array $sentences): array
+    public function normalizeSelectedChapterKeys(array $chapters): array
     {
-        if (count($sentences) <= self::MAX_SENTENCES) {
-            return $sentences;
+        $normalized = [];
+
+        foreach ($chapters as $chapter) {
+            $value = trim((string) $chapter);
+            if ($value === '') {
+                continue;
+            }
+
+            $upper = strtoupper($value);
+            $key = null;
+
+            if (str_starts_with($upper, 'BAB')) {
+                preg_match('/BAB\s+([IVXLCDM0-9]+)/i', $upper, $match);
+                if (! empty($match[1])) {
+                    $key = (string) $this->romanToArabic($match[1]);
+                }
+            } elseif (preg_match('/^\d+$/', $value)) {
+                $key = (string) (int) $value;
+            } else {
+                $key = strtolower(str_replace([' ', '-'], '_', $upper));
+            }
+
+            if ($key !== null && ! in_array($key, $normalized, true)) {
+                $normalized[] = $key;
+            }
         }
 
-        // Identik dengan Node.js: hanya mengambil N kalimat pertama (tanpa sampling/merata)
-        return array_slice($sentences, 0, self::MAX_SENTENCES);
+        return $normalized;
     }
 
     public function extractTextFromFile(string $filePath, string $mimeType, array $chapters = []): string
@@ -401,7 +508,7 @@ class PlagiarismService
             $headingRaw = trim($parts[$i]);
             $headingUpper = strtoupper($headingRaw);
             $content = $parts[$i+1] ?? '';
-            
+
             $matchKey = null;
             if (str_starts_with($headingUpper, 'BAB')) {
                 preg_match('/BAB\s+([IVXLCDM0-9]+)/i', $headingUpper, $m);
@@ -411,12 +518,12 @@ class PlagiarismService
             } else {
                 $matchKey = strtolower(str_replace(' ', '_', $headingUpper));
             }
-            
+
             if ($matchKey && (in_array($matchKey, $chapters, true) || in_array(strtolower($headingUpper), $chapters, true))) {
                 $filteredText .= "\n" . $headingUpper . "\n" . $content;
             }
         }
-        
+
         return $filteredText;
     }
 

@@ -32,7 +32,7 @@ class UserController extends Controller
 
     public function create(): View
     {
-        return view('admin.users.create');
+        return view('admin.users.create', ['plans' => config('plans')]);
     }
 
     public function store(Request $request): RedirectResponse
@@ -42,13 +42,25 @@ class UserController extends Controller
             'email' => ['required', 'string', 'lowercase', 'email', 'max:255', 'unique:'.User::class],
             'password' => ['required', 'confirmed', Rules\Password::defaults()],
             'role' => ['required', 'in:admin,user'],
+            'package_key' => ['nullable', Rule::in(array_keys(config('plans')))],
         ]);
+
+        $plan = $validated['package_key'] ? config('plans.' . $validated['package_key']) : null;
+
+        if ($validated['role'] === 'admin' && $plan) {
+            return back()
+                ->withInput()
+                ->withErrors(['package_key' => 'Paket hanya dapat diberikan kepada akun User, bukan Admin.']);
+        }
 
         User::create([
             'name' => $validated['name'],
             'email' => $validated['email'],
             'password' => $validated['password'],
             'role' => $validated['role'],
+            'package_key' => $validated['package_key'] ?? null,
+            'package_credits' => $plan['quota'] ?? 0,
+            'package_expires_at' => $plan ? now()->addDays((int) $plan['days']) : null,
         ]);
 
         return redirect()

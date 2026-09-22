@@ -1,8 +1,12 @@
-@extends('layouts.user')
+@extends($layout ?? 'layouts.user')
 
 @section('title', 'Detail Jurnal')
 @section('page-title', 'Detail Jurnal')
 @section('page-subtitle', $journal->title)
+
+@php
+    $routePrefix = str_starts_with(request()->route()?->getName() ?? '', 'admin.') ? 'admin' : 'user';
+@endphp
 
 @section('content')
 
@@ -15,12 +19,12 @@
 
         <div class="flex gap-2 w-full sm:w-auto">
             @if($journal->file_path_docx)
-            <a href="{{ route('user.journal.download', ['journal' => $journal->id, 'type' => 'docx']) }}" class="pc-btn-secondary flex-1 sm:flex-none">
+            <a href="{{ route($routePrefix . '.journal.download', ['journal' => $journal->id, 'type' => 'docx']) }}" class="pc-btn-secondary flex-1 sm:flex-none">
                 Unduh DOCX
             </a>
             @endif
             @if($journal->file_path_pdf)
-            <a href="{{ route('user.journal.download', ['journal' => $journal->id, 'type' => 'pdf']) }}" class="pc-btn-primary flex-1 sm:flex-none">
+            <a href="{{ route($routePrefix . '.journal.download', ['journal' => $journal->id, 'type' => 'pdf']) }}" class="pc-btn-primary flex-1 sm:flex-none">
                 Unduh PDF
             </a>
             @endif
