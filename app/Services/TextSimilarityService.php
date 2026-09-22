@@ -110,62 +110,6 @@ class TextSimilarityService
         return max($cosineSim, $ngramSim);
     }
 
-    public function prepareText(string $text, int $n = 5): array
-    {
-        $words = preg_split('/\s+/', mb_strtolower(trim($text)), -1, PREG_SPLIT_NO_EMPTY);
-        $frequencies = array_count_values($words ?: []);
-        $magnitude = 0.0;
-
-        foreach ($frequencies as $frequency) {
-            $magnitude += $frequency * $frequency;
-        }
-
-        $cleaned = preg_replace('/[^\p{L}\p{N}\s]/u', '', mb_strtolower($text));
-        $ngramWords = preg_split('/\s+/', trim($cleaned), -1, PREG_SPLIT_NO_EMPTY) ?: [];
-        $ngrams = [];
-
-        for ($index = 0, $count = count($ngramWords); $index <= $count - $n; $index++) {
-            $ngrams[implode(' ', array_slice($ngramWords, $index, $n))] = true;
-        }
-
-        return [
-            'frequencies' => $frequencies,
-            'magnitude' => $magnitude,
-            'ngrams' => $ngrams,
-        ];
-    }
-
-    public function comparePrepared(string $text, array $prepared): float
-    {
-        $sentence = $this->prepareText($text);
-        $dotProduct = 0.0;
-        $sentenceMagnitude = 0.0;
-
-        foreach ($sentence['frequencies'] as $word => $frequency) {
-            $dotProduct += $frequency * ($prepared['frequencies'][$word] ?? 0);
-            $sentenceMagnitude += $frequency * $frequency;
-        }
-
-        $cosineSimilarity = ($sentenceMagnitude > 0 && $prepared['magnitude'] > 0)
-            ? $dotProduct / (sqrt($sentenceMagnitude) * sqrt($prepared['magnitude']))
-            : 0.0;
-
-        if (empty($sentence['ngrams']) || empty($prepared['ngrams'])) {
-            return $cosineSimilarity;
-        }
-
-        $matches = 0;
-        foreach ($sentence['ngrams'] as $ngram => $_) {
-            if (isset($prepared['ngrams'][$ngram])) {
-                $matches++;
-            }
-        }
-
-        $ngramSimilarity = $matches / max(count($sentence['ngrams']), count($prepared['ngrams']));
-
-        return max($cosineSimilarity, $ngramSimilarity);
-    }
-
     public function compareTextsPercent(string $text1, string $text2): int
     {
         return (int) round($this->compareTexts($text1, $text2) * 100);

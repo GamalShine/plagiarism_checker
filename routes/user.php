@@ -19,24 +19,15 @@ Route::middleware(['auth', 'verified'])
         Route::prefix('plagiarism')->name('plagiarism.')->group(function () {
             Route::get('/', [PlagiarismController::class, 'index'])->name('index');
             Route::post('/extract-chapters', [PlagiarismController::class, 'extractChapters'])->name('extract_chapters');
-            Route::post('/check', [PlagiarismController::class, 'check'])->name('check');
             Route::post('/pay', [PaymentController::class, 'initiate'])->name('pay');
             Route::get('/result/{plagiarismCheck}', [PlagiarismController::class, 'result'])->name('result');
-            Route::get('/result/{plagiarismCheck}/status', [PlagiarismController::class, 'status'])->name('status');
-            Route::get('/document-docx/{plagiarismCheck}', [PlagiarismController::class, 'documentDocx'])->name('document_docx');
             Route::get('/document/{plagiarismCheck}', [PlagiarismController::class, 'documentPdf'])->name('document');
             Route::get('/export/{plagiarismCheck}', [PlagiarismController::class, 'export'])->name('export');
         });
 
         Route::prefix('payment')->name('payment.')->group(function () {
             Route::post('/{orderId}/confirm', [PaymentController::class, 'confirm'])->name('confirm');
-            Route::get('/{orderId}/confirm', function (string $orderId) {
-                return redirect()->route('user.payment.finish', $orderId);
-            });
             Route::get('/{orderId}/status', [PaymentController::class, 'status'])->name('status');
-            Route::get('/{orderId}/finish', [PaymentController::class, 'finish'])->name('finish');
-            Route::get('/{orderId}/error', [PaymentController::class, 'error'])->name('error');
-            Route::get('/{orderId}/pending', [PaymentController::class, 'pending'])->name('pending');
         });
 
         Route::prefix('journal')->name('journal.')->group(function () {

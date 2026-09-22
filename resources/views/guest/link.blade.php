@@ -1,7 +1,7 @@
 @extends('layouts.guest_check')
 
-@section('title', 'Cek Plagiarisme Tamu')
-@section('page-title', 'Cek Plagiarisme')
+@section('title', 'Cek Plagiasi Tamu')
+@section('page-title', 'Cek Plagiasi')
 @section('page-subtitle', $link->title ? 'Link: '.$link->title.' — hanya bisa dipakai sekali' : 'Link ini hanya bisa dipakai sekali')
 
 @section('content')
@@ -60,7 +60,7 @@
 
                     @foreach($sourceList as $src)
                     <label class="pc-source-card" :class="{ 'selected': sources.includes('{{ $src['key'] }}') }">
-                        <input type="checkbox" name="sources[]" value="{{ $src['key'] }}" class="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 shrink-0 mt-0.5" x-model="sources">
+                        <input type="checkbox" name="sources[]" value="{{ $src['key'] }}" class="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 shrink-0 mt-0.5" x-model="sources">
                         <div class="min-w-0">
                             <div class="flex items-center gap-2">
                                 <span class="text-sm font-semibold">{{ $src['label'] }}</span>
@@ -89,7 +89,7 @@
              class="absolute inset-0 z-10 backdrop-blur-sm flex flex-col items-center justify-center rounded-3xl bg-white/85 dark:bg-slate-900/85">
             <div class="text-center px-6">
                 <div class="w-16 h-16 mx-auto mb-6">
-                    <svg class="animate-spin w-full h-full text-blue-500" fill="none" viewBox="0 0 24 24">
+                    <svg class="animate-spin w-full h-full text-indigo-500" fill="none" viewBox="0 0 24 24">
                         <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
                         <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
                     </svg>
@@ -108,7 +108,7 @@ function plagiarismChecker() {
     return {
         dragover: false,
         fileName: '',
-        sources: {!! json_encode($settings?->default_sources ?: ['web', 'google_scholar', 'elsevier', 'openalex', 'crossref', 'crossref_posted', 'publications']) !!},
+        sources: {!! json_encode($settings?->default_sources ?? ['web', 'google_scholar', 'openalex', 'crossref', 'crossref_posted', 'publications']) !!},
         selectAll: false,
         isChecking: false,
         statusText: 'Membaca dan mengekstrak teks dokumen...',

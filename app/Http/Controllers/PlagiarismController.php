@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Jobs\ProcessPlagiarismCheck;
 use App\Models\Document;
 use App\Models\PlagiarismCheck;
 use App\Services\HistoryService;
@@ -10,7 +9,6 @@ use App\Services\PlagiarismExportService;
 use App\Services\PlagiarismService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\View\View;
@@ -111,27 +109,31 @@ class PlagiarismController extends Controller
 
     public function check(Request $request): RedirectResponse
     {
-        $user = auth()->user();
-        abort_unless($user?->isAdmin() || ($user?->role === 'user' && $user->hasActivePackage()), 403, 'Paket aktif diperlukan untuk melakukan pengecekan.');
-
         $request->validate([
             'file'    => 'required|file|mimes:pdf,docx,txt',
             'sources' => 'required|array|min:1',
             'sources.*' => 'in:web,google_scholar,elsevier,openalex,crossref,crossref_posted,publications',
+            'chapters' => 'nullable|array',
+            'chapters.*' => 'in:abstrak,kata_pengantar,1,2,3,4,5,6,7,8,9,10,daftar_pustaka,lampiran',
         ]);
 
+        $user = auth()->user();
         $file = $request->file('file');
-        $chapters = [];
-
-        if (! $user->isAdmin()) {
-            $user->decrement('package_credits');
-        }
 
         // Store file
         $path = $file->store('documents', 'public');
         $originalName = $file->getClientOriginalName();
 
-        $chapters = $this->plagiarismService->normalizeSelectedChapterKeys($request->input('chapters', []));
+        // Extract text
+        $fullPath = Storage::disk('public')->path($path);
+        $chapters = $request->input('chapters', []);
+        $content = $this->plagiarismService->extractTextFromFile($fullPath, $file->getMimeType(), $chapters);
+
+        if (empty(trim($content))) {
+            return back()->withErrors([
+                'file' => 'Tidak dapat mengekstrak teks dari file. Upload dokumen asli (Word/PDF berisi teks), bukan laporan Turnitin atau scan gambar.',
+            ]);
+        }
 
         // Create document
         $document = Document::create([
@@ -141,23 +143,31 @@ class PlagiarismController extends Controller
             'original_filename' => $originalName,
             'type'              => 'plagiarism',
             'status'            => 'processing',
-            'content'           => null,
+            'content'           => $content,
             'file_size'         => $file->getSize(),
             'mime_type'         => $file->getMimeType(),
         ]);
 
-        $check = PlagiarismCheck::create([
-            'document_id' => $document->id,
-            'user_id' => $user->id,
-            'status' => 'processing',
-            'sources_checked' => $request->input('sources'),
-            'chapters' => $chapters,
-        ]);
+        // Run plagiarism check
+        $check = $this->plagiarismService->check(
+            $document,
+            $request->input('sources'),
+            $user->settings
+        );
 
-        ProcessPlagiarismCheck::dispatch($check->id, $chapters);
+        $document->update(['status' => 'completed']);
+
+        // Log history
+        $this->historyService->logPlagiarismCheck(
+            $user,
+            $check->id,
+            $document->title,
+            $check->total_similarity,
+            $request->input('sources')
+        );
 
         return redirect()->route($this->routePrefix() . '.plagiarism.result', $check->id)
-            ->with('success', 'Pengecekan plagiarisme telah dimulai. Hasil akan muncul setelah proses selesai.');
+            ->with('success', 'Pengecekan plagiasi berhasil diselesaikan!');
     }
 
     public function result(PlagiarismCheck $plagiarismCheck): View
@@ -176,52 +186,12 @@ class PlagiarismController extends Controller
             $index++;
         }
 
-        $highlightCacheKey = 'plagiarism:result-html:' . $check->id . ':' . ($check->updated_at?->timestamp ?? 0);
-        $highlightedText = function_exists('shell_exec')
-            ? Cache::rememberForever($highlightCacheKey, fn () => $this->buildHighlightedText($check, $sourceIndexMap))
-            : '';
+        $highlightedText = $this->buildHighlightedText($check, $sourceIndexMap);
 
         return view('plagiarism.result', array_merge(
             compact('check', 'highlightedText', 'sourceIndexMap'),
             $this->viewContext()
         ));
-    }
-
-    public function status(PlagiarismCheck $plagiarismCheck)
-    {
-        Gate::authorize('view', $plagiarismCheck);
-
-        return response()->json([
-            'status' => $plagiarismCheck->status,
-            'error_message' => $plagiarismCheck->error_message,
-        ]);
-    }
-
-    public function updateSimilarity(Request $request, PlagiarismCheck $plagiarismCheck)
-    {
-        Gate::authorize('update', $plagiarismCheck);
-
-        $validated = $request->validate([
-            'total_similarity' => 'required|numeric|min:0|max:100',
-        ]);
-
-        $oldSimilarity = $plagiarismCheck->total_similarity;
-        $plagiarismCheck->update([
-            'total_similarity' => $validated['total_similarity'],
-        ]);
-
-        $this->historyService->log(
-            auth()->user(),
-            'update_similarity',
-            "Mengubah overall similarity hasil cek plagiarisme: {$oldSimilarity}% → {$validated['total_similarity']}% untuk dokumen \"{$plagiarismCheck->document->title}\""
-        );
-
-        return response()->json([
-            'message' => 'Overall similarity berhasil diperbarui',
-            'total_similarity' => $plagiarismCheck->total_similarity,
-            'similarity_color' => $plagiarismCheck->similarity_color,
-            'similarity_label' => $plagiarismCheck->similarity_label,
-        ]);
     }
 
     public function export(PlagiarismCheck $plagiarismCheck)
@@ -245,7 +215,7 @@ class PlagiarismController extends Controller
         $this->historyService->log(
             auth()->user(),
             'export',
-            "Export hasil cek plagiarisme: \"{$check->document->title}\""
+            "Export hasil cek plagiasi: \"{$check->document->title}\""
         );
 
         return $this->plagiarismExportService->buildExportResponse(
@@ -259,14 +229,9 @@ class PlagiarismController extends Controller
     {
         Gate::authorize('view', $plagiarismCheck);
 
-        $plagiarismCheck->load(['document', 'highlights.source']);
         $filePath = \Illuminate\Support\Facades\Storage::disk('public')->path($plagiarismCheck->document->file_path);
         $renderer = app(\App\Services\DocumentPageRenderer::class);
-        $pdfPath = $renderer->resolveSourcePdfWithoutShell(
-            $filePath,
-            $plagiarismCheck->document->id,
-            $plagiarismCheck->highlights->all(),
-        );
+        $pdfPath = $renderer->resolveSourcePdf($filePath, $plagiarismCheck->document->id);
 
         if (!$pdfPath || !file_exists($pdfPath)) {
             // Fallback to original if it's already a PDF
@@ -279,21 +244,6 @@ class PlagiarismController extends Controller
         return response()->file($pdfPath, [
             'Content-Type' => 'application/pdf',
             'Content-Disposition' => 'inline; filename="document.pdf"'
-        ]);
-    }
-
-    public function documentDocx(PlagiarismCheck $plagiarismCheck)
-    {
-        Gate::authorize('view', $plagiarismCheck);
-
-        $filePath = Storage::disk('public')->path($plagiarismCheck->document->file_path);
-        if (! is_file($filePath)) {
-            abort(404, 'Dokumen asli tidak ditemukan.');
-        }
-
-        return response()->file($filePath, [
-            'Content-Type' => $plagiarismCheck->document->mime_type ?: 'application/octet-stream',
-            'Content-Disposition' => 'inline; filename="' . addslashes($plagiarismCheck->document->original_filename) . '"',
         ]);
     }
 
@@ -311,45 +261,26 @@ class PlagiarismController extends Controller
             $sorted = $highlights->sortByDesc(fn($h) => mb_strlen($h->original_text));
 
             foreach ($sorted as $highlight) {
-                $rawOriginal = $highlight->original_text;
-                $needle = htmlspecialchars($rawOriginal);
+                $needle = htmlspecialchars($highlight->original_text);
                 if ($needle === '') continue;
 
                 $sourceId = $highlight->plagiarism_source_id;
                 $tIndex = $sourceIndexMap[$sourceId] ?? '*';
-                $color = 'transparent';
+                $color = $highlight->source->color_code ?? '#ff0000';
 
                 $badge = "<sup class=\"t-badge\" style=\"background-color: {$color};\" title=\"" . htmlspecialchars($highlight->source->source_label ?? '') . " ({$highlight->match_percentage}%)\">{$tIndex}</sup>";
-                $replacement = "<mark class=\"t-highlight\" data-source-id=\"{$sourceId}\" data-source-index=\"{$tIndex}\" data-source-color=\"{$color}\" style=\"background-color: {$color}33; border-bottom: 2px solid {$color};\">{$badge}{$needle}</mark>";
+                $replacement = "<mark class=\"t-highlight\" style=\"background-color: {$color}66;\">{$badge}{$needle}</mark>";
 
                 $text = str_replace($needle, $replacement, $text);
             }
         }
 
-        // Pertahankan struktur paragraf dan indentasi naskah dokumen asli
-        $paragraphs = preg_split('/\r\n\r\n|\n\n|\r\r/', $text);
-        if (count($paragraphs) > 1) {
-            $formattedParagraphs = [];
-            foreach ($paragraphs as $p) {
-                $pTrim = trim($p);
-                if ($pTrim === '') continue;
-                $formattedParagraphs[] = '<p>' . nl2br($pTrim) . '</p>';
-            }
-            $text = implode("\n", $formattedParagraphs);
-        } else {
-            $text = nl2br($text);
-        }
+        $text = nl2br($text);
 
-        // Auto-format headings & next page break (BAB / Pemisah Halaman)
+        // Auto-format headings to make the plain text look more like a real document
         $text = preg_replace(
-            '/^(<mark[^>]*>)?(BAB\s+[IVXLCDM0-9]+.*?)(<\/mark>)?(\s|<br\s*\/?>)*$/mi',
-            '<div class="doc-page-break"></div><div style="text-align: center; font-weight: bold; margin-top: 2rem; margin-bottom: 1.5rem; font-size: 18px; text-transform: uppercase;">$1$2$3</div>',
-            $text
-        );
-
-        $text = preg_replace(
-            '/^(<mark[^>]*>)?(ABSTRAK|KATA PENGANTAR|DAFTAR ISI|DAFTAR PUSTAKA|LAMPIRAN)(<\/mark>)?(\s|<br\s*\/?>)*$/mi',
-            '<div class="doc-page-break"></div><div style="text-align: center; font-weight: bold; margin-top: 2rem; margin-bottom: 1.5rem; font-size: 18px; text-transform: uppercase;">$1$2$3</div>',
+            '/^(<mark[^>]*>)?(BAB\s+[IVXLCDM0-9]+.*?|ABSTRAK|KATA PENGANTAR|DAFTAR ISI|DAFTAR PUSTAKA|LAMPIRAN)(<\/mark>)?(\s|<br\s*\/?>)*$/mi',
+            '<div style="text-align: center; font-weight: bold; margin-top: 2rem; margin-bottom: 1rem; text-transform: uppercase;">$1$2$3</div>',
             $text
         );
 
@@ -381,7 +312,7 @@ class PlagiarismController extends Controller
                 'type' => 'mark',
                 'content' => mb_substr($content, $start, $end - $start),
                 'source_id' => $highlight->plagiarism_source_id,
-                'color' => 'transparent',
+                'color' => $highlight->source->color_code ?? '#ff0000',
                 'label' => $highlight->source->source_label ?? '',
                 'percentage' => $highlight->match_percentage,
             ];
@@ -406,9 +337,9 @@ class PlagiarismController extends Controller
             }
 
             $tIndex = $sourceIndexMap[$segment['source_id']] ?? '*';
-            $color = 'transparent';
+            $color = $segment['color'];
             $badge = "<sup class=\"t-badge\" style=\"background-color: {$color};\" title=\"" . htmlspecialchars($segment['label']) . " ({$segment['percentage']}%)\">{$tIndex}</sup>";
-            $html .= "<mark class=\"t-highlight\" data-source-id=\"{$segment['source_id']}\" data-source-index=\"{$tIndex}\" data-source-color=\"{$color}\" style=\"background-color: {$color}66;\">{$badge}" . htmlspecialchars($segment['content']) . '</mark>';
+            $html .= "<mark class=\"t-highlight\" style=\"background-color: {$color}66;\">{$badge}" . htmlspecialchars($segment['content']) . '</mark>';
         }
 
         return nl2br($html);

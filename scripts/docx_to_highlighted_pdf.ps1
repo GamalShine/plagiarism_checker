@@ -16,7 +16,7 @@ $document = $null
 function Convert-HexToWordColor([string]$HexColor) {
     $hex = ($HexColor -replace '#', '').Trim()
     if ($hex.Length -ne 6 -or $hex -notmatch '^[0-9a-fA-F]{6}$') {
-        return $null
+        return 65535
     }
 
     $red = [Convert]::ToInt32($hex.Substring(0, 2), 16)
@@ -53,55 +53,40 @@ try {
             continue
         }
 
-        # Match the browser preview with Word-safe chunks. Word rejects long
-        # Find.Text values, so split long sentences at word boundaries.
-        $words = @($needle -split ' ' | Where-Object { $_.Length -gt 2 })
-        $searchPhrases = @()
+        # Word Find.Text rejects long strings. Search in word-boundary chunks
+        # so long detected sentences still receive a continuous highlight.
+        $words = $needle -split ' '
+        $chunks = @()
         $chunk = ''
-        foreach ($wordPart in ($needle -split ' ')) {
-            $candidate = if ($chunk) { "$chunk $wordPart" } else { $wordPart }
+        foreach ($word in $words) {
+            $candidate = if ($chunk) { "$chunk $word" } else { $word }
             if ($candidate.Length -gt 180 -and $chunk) {
-                $searchPhrases += $chunk
-                $chunk = $wordPart
+                $chunks += $chunk
+                $chunk = $word
             } else {
                 $chunk = $candidate
             }
         }
         if ($chunk) {
-            $searchPhrases += $chunk
+            $chunks += $chunk
         }
 
-        if ($words.Count -ge 4) {
-            $searchPhrases += (($words | Select-Object -First 6) -join ' ')
-            if ($words.Count -ge 10) {
-                $searchPhrases += (($words | Select-Object -Skip 4 -First 6) -join ' ')
-            }
-        }
-
-        foreach ($phrase in ($searchPhrases | Select-Object -Unique)) {
-            if ([string]::IsNullOrWhiteSpace($phrase) -or $phrase.Length -lt 6) {
-                continue
-            }
-
-            $color = Convert-HexToWordColor ([string]$item.color)
-            if ($null -eq $color) {
-                continue
-            }
-
+        foreach ($chunk in $chunks) {
             $search = $document.Content.Duplicate
             $find = $search.Find
             $find.ClearFormatting()
-            $find.Text = $phrase
+            $find.Text = $chunk
             $find.Forward = $true
             $find.Wrap = 0
             $find.Format = $false
 
             while ($find.Execute()) {
+                $color = Convert-HexToWordColor ([string]$item.color)
                 $search.Shading.BackgroundPatternColor = $color
                 $search.Collapse(0)
                 $find = $search.Find
                 $find.ClearFormatting()
-                $find.Text = $phrase
+                $find.Text = $chunk
                 $find.Forward = $true
                 $find.Wrap = 0
                 $find.Format = $false

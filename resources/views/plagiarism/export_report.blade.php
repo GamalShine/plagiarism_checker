@@ -242,7 +242,7 @@
         margin-bottom: 8px;
         padding: 7px 9px;
         border-left: 4px solid #f59e0b;
-        background-color: #84CC16;
+        background-color: #fff3a3;
         color: #1f2937;
         font-size: 10px;
         line-height: 1.45;
@@ -322,7 +322,7 @@
         '#EC4899',
         '#F97316',
         '#6366F1',
-        '#06B6D4',
+        '#EAB308',
         '#64748B',
         ];
         $truncatePdfTitle = function (?string $value, int $maxChars = 170): string {
@@ -355,7 +355,7 @@
                 }
                 }
                 $sourceLabel = $source->source_label ?? $source->source_name ?? 'Internet';
-                $rowColor = $source->color_code ?? $turnitinPalette[$idx % count($turnitinPalette)];
+                $rowColor = $turnitinPalette[$idx % count($turnitinPalette)];
                 $displayTitle = $truncatePdfTitle($displayTitle, 170);
                 @endphp
                 <tr class="source-row">
