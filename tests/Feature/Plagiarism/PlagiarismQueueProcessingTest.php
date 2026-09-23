@@ -61,6 +61,69 @@ class PlagiarismQueueProcessingTest extends TestCase
         $this->assertSame(['1', '3'], $job->chapters);
     }
 
+    public function test_plagiarism_job_timeout_matches_five_minute_target(): void
+    {
+        $job = new ProcessPlagiarismCheck(42, ['1']);
+
+        $this->assertSame(300, $job->timeout);
+    }
+
+    public function test_large_documents_use_a_representative_sentence_budget(): void
+    {
+        $service = app(\App\Services\PlagiarismService::class);
+        $method = new \ReflectionMethod($service, 'limitSentencesForTimeBudget');
+        $method->setAccessible(true);
+
+        $sentences = array_map(
+            fn (int $index): string => "Kalimat dokumen nomor {$index} dengan isi yang cukup panjang untuk pemeriksaan.",
+            range(1, 1000),
+        );
+
+        $limited = $method->invoke($service, $sentences);
+
+        $this->assertCount(50, $limited);
+        $this->assertSame($sentences[0], $limited[0]);
+        $this->assertSame($sentences[999], $limited[49]);
+    }
+
+    public function test_repeated_matching_sentences_create_multiple_highlight_positions(): void
+    {
+        $service = app(\App\Services\PlagiarismService::class);
+        $method = new \ReflectionMethod($service, 'findSentencePositions');
+        $method->setAccessible(true);
+
+        $sentence = 'Kalimat yang terdeteksi sebagai sumber plagiarisme.';
+        $positions = $method->invoke($service, "Awal. {$sentence} Tengah. {$sentence} Akhir. {$sentence}", $sentence);
+
+        $this->assertCount(3, $positions);
+        $this->assertLessThan($positions[1]['start'], $positions[0]['start']);
+        $this->assertLessThan($positions[2]['start'], $positions[1]['start']);
+    }
+
+    public function test_matching_phrase_in_long_source_is_not_diluted_by_source_length(): void
+    {
+        $service = app(\App\Services\TextSimilarityService::class);
+        $sentence = 'Penelitian ini menggunakan metode kuantitatif untuk analisis data.';
+        $source = $sentence . ' ' . str_repeat('Kata tambahan dari artikel sumber. ', 100);
+
+        $this->assertGreaterThan(0.04, $service->nGramSimilarity($sentence, $source));
+    }
+
+    public function test_failed_extraction_does_not_trigger_queue_retry_loop(): void
+    {
+        $check = \App\Models\PlagiarismCheck::create([
+            'document_id' => 999,
+            'user_id' => 1,
+            'status' => 'processing',
+            'sources_checked' => ['web'],
+        ]);
+
+        $job = new ProcessPlagiarismCheck($check->id);
+
+        $this->assertSame(1, $job->tries);
+        $this->assertSame(300, $job->timeout);
+    }
+
     public function test_selected_chapters_are_used_to_filter_document_text(): void
     {
         $service = app(\App\Services\PlagiarismService::class);

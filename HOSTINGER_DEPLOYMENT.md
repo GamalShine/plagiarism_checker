@@ -61,7 +61,7 @@ Make sure `storage/` and `bootstrap/cache/` are writable by PHP.
 The plagiarism job uses the `plagiarism` queue. A shared Hostinger plan needs a cron job because a permanent worker may not be available. Configure a cron job every minute with the real account paths:
 
 ```bash
-cd /home/USERNAME/plagiarism_checker && php artisan queue:work database --queue=plagiarism --stop-when-empty --timeout=1800 --tries=1
+cd /home/USERNAME/plagiarism_checker && php artisan queue:work database --queue=plagiarism --stop-when-empty --timeout=300 --tries=1
 ```
 
 The command must use the same PHP version selected for the domain. Do not run `queue:work` with the default queue only; plagiarism jobs are explicitly dispatched to `plagiarism`.

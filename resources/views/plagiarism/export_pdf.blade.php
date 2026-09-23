@@ -568,18 +568,6 @@
             </table>
         @endif
 
-        {{-- HIGHLIGHTED TEXT (jika ada) --}}
-        @if(!empty(trim($highlightedText)))
-            <div class="highlight-section-label">Naskah dengan Highlight Plagiarisme</div>
-            <p class="highlight-section-desc">
-                Teks yang disorot menunjukkan kecocokan dengan sumber eksternal. Nomor pada supersekuen sesuai dengan daftar
-                Primary Sources di atas.
-            </p>
-            <div class="content">
-                {!! $highlightedText !!}
-            </div>
-        @endif
-
         <div class="footer" style="text-align: left; font-size: 11px; color: #6b7280; opacity: 1; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; line-height: 1.6; margin-top: 30px; border-top: 1px solid #e5e7eb; padding-top: 12px;">
             <table style="width: 100%; border-collapse: collapse; font-size: 11px; color: #6b7280;">
                 <tr>

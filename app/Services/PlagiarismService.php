@@ -85,8 +85,13 @@ class PlagiarismService
                 throw new \Exception('Tidak ada kalimat valid. Pastikan dokumen memiliki kalimat panjang (>20 karakter) yang dipisah titik (.), tanda seru (!), atau tanda tanya (?)');
             }
 
-            // Periksa semua kalimat agar setiap kecocokan dapat dibuat highlight.
-            $selectedSentences = $sentences;
+            $selectedSentences = $this->limitSentencesForTimeBudget($sentences);
+
+            Log::info('Plagiarism sentence budget applied', [
+                'check_id' => $check->id,
+                'document_sentences' => count($sentences),
+                'checked_sentences' => count($selectedSentences),
+            ]);
 
             // Per-sentence: search sumber → compare → catat hasil
             $sentenceResults = [];
@@ -303,28 +308,25 @@ class PlagiarismService
                 continue;
             }
 
-            $highlightKey = $sourceModel->id . '|' . md5($sentence);
-            if (isset($createdHighlightKeys[$highlightKey])) {
-                continue;
-            }
+            foreach ($this->findSentencePositions($documentContent, $sentence) as $positions) {
+                $highlightKey = $sourceModel->id . '|' . ($positions['start'] ?? 0);
+                if (isset($createdHighlightKeys[$highlightKey])) {
+                    continue;
+                }
 
-            $positions = $this->findSentencePosition($documentContent, $sentence);
-            if (!$positions) {
-                continue;
+                PlagiarismHighlight::create([
+                    'plagiarism_check_id' => $check->id,
+                    'plagiarism_source_id' => $sourceModel->id,
+                    'original_text' => $sentence,
+                    'matched_text' => mb_substr($match['content'] ?? $match['title'] ?? '', 0, 500),
+                    'color_code' => $sourceModel->color_code,
+                    'match_percentage' => (int) ($match['similarity'] ?? 0),
+                    'start_position' => $positions['start'] ?? 0,
+                    'end_position' => $positions['end'] ?? 0,
+                ]);
+                $highlightedSourceIds[$sourceModel->id] = true;
+                $createdHighlightKeys[$highlightKey] = true;
             }
-
-            PlagiarismHighlight::create([
-                'plagiarism_check_id' => $check->id,
-                'plagiarism_source_id' => $sourceModel->id,
-                'original_text' => $sentence,
-                'matched_text' => mb_substr($match['content'] ?? $match['title'] ?? '', 0, 500),
-                'color_code' => $sourceModel->color_code,
-                'match_percentage' => (int) ($match['similarity'] ?? 0),
-                'start_position' => $positions['start'] ?? 0,
-                'end_position' => $positions['end'] ?? 0,
-            ]);
-            $highlightedSourceIds[$sourceModel->id] = true;
-            $createdHighlightKeys[$highlightKey] = true;
         }
 
         // Some sources are aggregated from search results without a sentence-level match.
@@ -385,20 +387,33 @@ class PlagiarismService
 
     private function findSentencePosition(string $content, string $sentence): ?array
     {
+        return $this->findSentencePositions($content, $sentence)[0] ?? null;
+    }
+
+    private function findSentencePositions(string $content, string $sentence): array
+    {
         $sentence = trim($sentence);
         if ($sentence === '' || $content === '') {
-            return null;
+            return [];
         }
 
-        $pos = mb_strpos($content, $sentence);
-        if ($pos !== false) {
-            return [
-                'start' => $pos,
-                'end' => $pos + mb_strlen($sentence),
+        $positions = [];
+        $offset = 0;
+        $sentenceLength = mb_strlen($sentence);
+
+        while (($start = mb_stripos($content, $sentence, $offset)) !== false) {
+            $positions[] = [
+                'start' => $start,
+                'end' => $start + $sentenceLength,
             ];
+            $offset = $start + max(1, $sentenceLength);
         }
 
         // Word/PDF extraction may replace spaces with line breaks or tabs.
+        if ($positions !== []) {
+            return $positions;
+        }
+
         $pattern = preg_quote($sentence, '/');
         $pattern = preg_replace('/\\\\s+/u', '\\s+', $pattern);
         if (is_string($pattern) && preg_match('/' . $pattern . '/iu', $content, $match, PREG_OFFSET_CAPTURE)) {
@@ -406,13 +421,13 @@ class PlagiarismService
             $byteOffset = (int) ($match[0][1] ?? 0);
             $start = mb_strlen(substr($content, 0, $byteOffset));
 
-            return [
+            return [[
                 'start' => $start,
                 'end' => $start + mb_strlen($matchedText),
-            ];
+            ]];
         }
 
-        return null;
+        return [];
     }
 
     private function extractSentences(string $text): array
@@ -424,6 +439,27 @@ class PlagiarismService
         ));
 
         return $sentences;
+    }
+
+    private function limitSentencesForTimeBudget(array $sentences): array
+    {
+        $limit = (int) env('PLAGIARISM_MAX_SENTENCES', 50);
+
+        if ($limit <= 0 || count($sentences) <= $limit) {
+            return $sentences;
+        }
+
+        $sampled = [];
+        $total = count($sentences);
+
+        for ($index = 0; $index < $limit; $index++) {
+            $sourceIndex = $limit === 1
+                ? 0
+                : (int) round($index * ($total - 1) / ($limit - 1));
+            $sampled[] = $sentences[$sourceIndex];
+        }
+
+        return $sampled;
     }
 
     private function isValidSentence(string $sentence): bool
@@ -670,11 +706,11 @@ class PlagiarismService
         }
 
         $words = preg_split('/\s+/u', $text, -1, PREG_SPLIT_NO_EMPTY);
-        if (count($words) < 50) {
+        if (! is_array($words) || count($words) < 50) {
             return false;
         }
 
-        $alphaWords = array_filter($words, fn($word) => preg_match('/\p{L}{3,}/u', $word));
+        $alphaWords = array_filter($words, fn($word) => is_string($word) && preg_match('/\p{L}{3,}/u', $word) === 1);
         if (count($alphaWords) / max(count($words), 1) < 0.3) {
             return false;
         }

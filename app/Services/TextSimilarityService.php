@@ -5,7 +5,8 @@ namespace App\Services;
 /**
  * TextSimilarityService
  *
- * Algoritma identik 1:1 dengan Free-Turnitin-Plagiarism-Checker/server/plagiarism.js:
+ * Similarity scoring compatible with the Free-Turnitin-Plagiarism-Checker
+ * baseline, with source-coverage n-gram scoring for long source documents:
  *
  *   calculateSimilarity() → Cosine similarity (semua kata, tanpa filter stop words)
  *   nGramSimilarity()     → 5-gram Jaccard similarity (matches / max(size1, size2))
@@ -55,12 +56,12 @@ class TextSimilarityService
     }
 
     /**
-     * N-gram similarity — identik dengan nGramSimilarity(text1, text2, n=5) di Node.js.
+    * N-gram similarity measured as submitted-text coverage in the source.
      *
      * Node.js:
      *   words = text.toLowerCase().replace(/[^\w\s]/g, "").split(/\s+/)
      *   ngrams = Set of n-consecutive-word sequences
-     *   return matches / Math.max(ngrams1.size, ngrams2.size)
+    *   return matches / ngrams1.size
      */
     public function nGramSimilarity(string $text1, string $text2, int $n = 5): float
     {
@@ -85,7 +86,9 @@ class TextSimilarityService
             return 0.0;
         }
 
-        // matches / Math.max(ngrams1.size, ngrams2.size)
+        // Measure source coverage of the submitted text. Dividing by the
+        // entire source article made an exact sentence look unrelated when
+        // the source contained thousands of additional words.
         $matches = 0;
         foreach ($ngrams1 as $gram => $_) {
             if (isset($ngrams2[$gram])) {
@@ -93,11 +96,11 @@ class TextSimilarityService
             }
         }
 
-        return $matches / max(count($ngrams1), count($ngrams2));
+        return $matches / count($ngrams1);
     }
 
     /**
-     * compareTexts — identik dengan compareTexts() di Node.js:
+    * compareTexts combines cosine similarity with source-coverage n-gram similarity:
      *
      *   const cosineSim = calculateSimilarity(text1, text2);
      *   const ngramSim  = nGramSimilarity(text1, text2, 5);

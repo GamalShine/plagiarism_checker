@@ -23,6 +23,11 @@ function Convert-HexToWordColor([string]$HexColor) {
     $green = [Convert]::ToInt32($hex.Substring(2, 2), 16)
     $blue = [Convert]::ToInt32($hex.Substring(4, 2), 16)
 
+    # Word shading has no opacity; blend toward white for a pastel marker effect.
+    $red = [Math]::Round($red + ((255 - $red) * 0.55))
+    $green = [Math]::Round($green + ((255 - $green) * 0.55))
+    $blue = [Math]::Round($blue + ((255 - $blue) * 0.55))
+
     return $red + ($green * 256) + ($blue * 65536)
 }
 

@@ -27,7 +27,8 @@ def parse_color(value: str | None) -> tuple[float, float, float]:
 
 
 def soften_color(color: tuple[float, float, float]) -> tuple[float, float, float]:
-    return tuple(min(1.0, channel + 0.18) for channel in color)
+    # Blend with white so the annotation stays readable over black text.
+    return tuple(channel + ((1.0 - channel) * 0.55) for channel in color)
 
 
 def add_highlight_label(page: pymupdf.Page, rect: pymupdf.Rect, number: int, color: tuple[float, float, float]) -> None:
@@ -82,14 +83,21 @@ def highlight_source_pages(source: pymupdf.Document, highlights: list[dict], dra
     applied = 0
 
     for page in source:
+        occupied = []
         for quads, source_index, color in find_highlight_quads(page, highlights):
+            rect = quads[0].rect
+            if any(rect.intersects(existing) and rect.get_area() <= existing.get_area() * 1.15
+                   for existing in occupied):
+                continue
+
             soft_color = soften_color(color)
             annotation = page.add_highlight_annot(quads)
             annotation.set_colors(stroke=soft_color, fill=soft_color)
-            annotation.set_opacity(0.28)
+            annotation.set_opacity(0.50)
             annotation.update()
             if draw_labels and source_index > 0:
                 add_highlight_label(page, quads[0].rect, source_index, soft_color)
+            occupied.append(rect)
             applied += 1
 
     return applied

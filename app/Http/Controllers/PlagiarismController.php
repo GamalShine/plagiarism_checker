@@ -164,9 +164,29 @@ class PlagiarismController extends Controller
     {
         Gate::authorize('view', $plagiarismCheck);
 
-        $check = $plagiarismCheck->load(['document', 'sources' => function ($query) {
-            $query->orderBy('similarity_score', 'desc');
-        }, 'highlights.source']);
+        $resultHighlightLimit = max(50, (int) env('RESULT_HIGHLIGHT_LIMIT', 500));
+        $check = $plagiarismCheck->load([
+            'document',
+            'sources' => function ($query) {
+                $query->orderBy('similarity_score', 'desc');
+            },
+            'highlights' => function ($query) use ($resultHighlightLimit) {
+                $query->select([
+                    'id',
+                    'plagiarism_check_id',
+                    'plagiarism_source_id',
+                    'original_text',
+                    'matched_text',
+                    'color_code',
+                    'start_position',
+                    'end_position',
+                    'match_percentage',
+                ])
+                    ->orderBy('start_position')
+                    ->limit($resultHighlightLimit);
+            },
+            'highlights.source',
+        ]);
 
         $sourceIndexMap = [];
         $index = 1;

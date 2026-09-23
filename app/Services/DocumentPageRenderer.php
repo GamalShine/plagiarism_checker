@@ -201,8 +201,8 @@ class DocumentPageRenderer
             (string) (filesize($filePath) ?: 0),
             (string) $dpi,
             (string) $jpegQuality,
-            'native-v2',
-            'word-v2-colored-highlights',
+            'native-v3-plain-source',
+            'word-v3-pastel-highlights',
         ]));
 
         return Storage::disk('local')->path("document-previews/{$documentId}/{$hash}");

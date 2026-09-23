@@ -56,8 +56,7 @@ if ($score > 0 && $score <= 24) $mainColor='#16a34a' ; elseif ($score> 24 && $sc
                                 <p
                                     class="text-xs font-bold uppercase tracking-[0.18em] text-indigo-600 dark:text-indigo-400">
                                     Live analysis</p>
-                                <h2 class="mt-2 text-2xl font-black text-slate-900 dark:text-white">Menganalisis dokumen
-                                </h2>
+                                <h2 class="mt-2 text-2xl font-black text-slate-900 dark:text-white">Menganalisis dokumen</h2>
                                 <p id="processing-stage-text" class="mt-2 text-sm text-slate-500 dark:text-slate-400">
                                     Menyiapkan dokumen untuk dipindai...</p>
                             </div>
@@ -75,9 +74,10 @@ if ($score > 0 && $score <= 24) $mainColor='#16a34a' ; elseif ($score> 24 && $sc
                         <div class="mt-8 grid gap-3 sm:grid-cols-4">
                             @foreach(['Membaca dokumen', 'Mencari sumber', 'Mencocokkan teks', 'Menyusun laporan'] as $step => $label)
                             <div
-                                class="processing-step flex items-center gap-3 rounded-xl border border-slate-200 px-3 py-3 text-xs font-semibold text-slate-500 dark:border-slate-700 dark:text-slate-400">
+                                    class="processing-step flex items-center gap-3 rounded-xl border border-slate-200 px-3 py-3 text-xs font-semibold text-slate-500 dark:border-slate-700 dark:text-slate-400"
+                                    aria-label="{{ $label }}">
                                 <span
-                                    class="step-icon flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-100 text-[11px] dark:bg-slate-700">{{ $step + 1 }}</span><span>{{ $label }}</span>
+                                    class="step-icon flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-100 text-[11px] dark:bg-slate-700">{{ $step + 1 }}</span><span class="step-label">{{ $label }}</span>
                             </div>
                             @endforeach
                         </div>
@@ -115,7 +115,7 @@ if ($score > 0 && $score <= 24) $mainColor='#16a34a' ; elseif ($score> 24 && $sc
                     }
                     updateProgress();
                     const progressTimer = setInterval(updateProgress, 1000);
-                    const statusTimer = setInterval(async function() {
+                    async function pollStatus() {
                         try {
                             const response = await fetch(statusUrl, {
                                 headers: {
@@ -132,7 +132,9 @@ if ($score > 0 && $score <= 24) $mainColor='#16a34a' ; elseif ($score> 24 && $sc
                         } catch (error) {
                             console.warn('Status pengecekan belum dapat dimuat:', error);
                         }
-                    }, 3000);
+                    }
+                    pollStatus();
+                    const statusTimer = setInterval(pollStatus, 3000);
                 })();
                 </script>
                 @elseif($check->status === 'failed')
@@ -190,14 +192,19 @@ if ($score > 0 && $score <= 24) $mainColor='#16a34a' ; elseif ($score> 24 && $sc
                             <div id="docx-container"
                                 class="p-4 sm:p-6 overflow-y-auto flex-1 min-h-0 pc-scrollbar flex flex-col items-center">
                                 <div id="docx-loading"
-                                    class="flex flex-col items-center justify-center py-16 text-slate-500 gap-3">
-                                    <svg class="animate-spin w-8 h-8 text-indigo-600" fill="none" viewBox="0 0 24 24">
-                                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor"
-                                            stroke-width="4" />
-                                        <path class="opacity-75" fill="currentColor"
-                                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                                    </svg>
-                                    <span class="text-xs font-semibold">Memuat layout Word 1:1 beserta stabilo...</span>
+                                    class="flex flex-col items-center justify-center py-10 text-slate-500 gap-3">
+                                    <span class="text-xs font-semibold">Tampilan ringan siap digunakan.</span>
+                                    <button id="load-docx-preview" type="button"
+                                        class="pc-btn-secondary pc-btn-sm inline-flex items-center gap-2">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                d="M4 6h16M4 12h16M4 18h10" />
+                                        </svg>
+                                        Muat tampilan Word 1:1
+                                    </button>
+                                </div>
+                                <div id="doc-text-preview" class="doc-text-preview w-full max-w-4xl rounded-sm bg-white p-6 shadow-sm">
+                                    {!! $highlightedText !!}
                                 </div>
                                 <div id="docx-render-target" class="w-full flex flex-col items-center"></div>
                             </div>
@@ -822,6 +829,8 @@ if ($score > 0 && $score <= 24) $mainColor='#16a34a' ; elseif ($score> 24 && $sc
 
                     const docxLoading = document.getElementById('docx-loading');
                     const docxTarget = document.getElementById('docx-render-target');
+                    const docTextPreview = document.getElementById('doc-text-preview');
+                    const loadDocxPreview = document.getElementById('load-docx-preview');
                     const docxContainer = document.getElementById('docx-container');
                     const sidebarPanel = document.getElementById('sidebar-panel');
                     const docContainer = document.getElementById('doc-container');
@@ -840,10 +849,13 @@ if ($score > 0 && $score <= 24) $mainColor='#16a34a' ; elseif ($score> 24 && $sc
                         });
                     }
 
-                    // Preview dokumen asli selalu aktif; tidak ada toggle ke teks ekstrak.
+                    // Gunakan preview teks yang ringan sebagai default; layout Word dimuat sesuai permintaan.
                     if (fileExt === 'docx') {
                         docxContainer.style.display = 'flex';
-                        renderDocx();
+                        if (docxTarget) docxTarget.style.display = 'none';
+                        if (loadDocxPreview) loadDocxPreview.addEventListener('click', renderDocx);
+                    } else if (docxLoading) {
+                        docxLoading.style.display = 'none';
                     }
 
                     function syncContainerHeight() {
@@ -878,6 +890,9 @@ if ($score > 0 && $score <= 24) $mainColor='#16a34a' ; elseif ($score> 24 && $sc
                             }
                             const blob = await response.blob();
 
+                            if (docTextPreview) docTextPreview.style.display = 'none';
+                            if (docxTarget) docxTarget.style.display = 'flex';
+                            if (loadDocxPreview) loadDocxPreview.disabled = true;
                             await window.docx.renderAsync(blob, docxTarget, null, {
                                 className: "docx",
                                 inWrapper: true,
@@ -956,6 +971,8 @@ if ($score > 0 && $score <= 24) $mainColor='#16a34a' ; elseif ($score> 24 && $sc
                             if (docxLoading) {
                                 docxLoading.innerHTML = '<span class="text-xs font-semibold text-red-600">Dokumen Word gagal dimuat. Gunakan Teks Ekstrak.</span>';
                             }
+                            if (docTextPreview) docTextPreview.style.display = 'block';
+                            if (docxTarget) docxTarget.style.display = 'none';
                         } finally {
                             docxRenderPromise = null;
                         }

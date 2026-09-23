@@ -63,10 +63,11 @@ class PlagiarismExportService
             ? Storage::disk('public')->path($check->document->file_path)
             : '';
 
-        $highlightedSourcePdf = $this->documentPageRenderer->resolveSourcePdfWithoutShell(
+        // Python applies the annotations to the plain source PDF. Do not feed
+        // it a PDF already highlighted by Word, or the colors stack and darken.
+        $highlightedSourcePdf = $this->documentPageRenderer->resolveSourcePdf(
             $filePath,
             $check->document->id,
-            $check->highlights->all(),
         );
         $sourcePdf = $highlightedSourcePdf;
         if (! $sourcePdf && $check->highlights->isEmpty()) {
@@ -376,6 +377,35 @@ class PlagiarismExportService
         ?string $highlightsManifest = null,
         ?string $submissionId = null
     ): bool {
+        $pythonScript = base_path('scripts/merge_pdfs.py');
+        if (is_file($pythonScript) && $sourcePath && is_file($sourcePath)) {
+            @unlink($outputPath);
+            $python = $this->resolvePythonBinary();
+            $arguments = [
+                escapeshellarg($python),
+                escapeshellarg($pythonScript),
+                escapeshellarg($outputPath),
+                '--cover', escapeshellarg($coverPath),
+                '--source', escapeshellarg($sourcePath),
+                '--report', escapeshellarg($reportPath),
+            ];
+
+            if ($highlightsManifest && is_file($highlightsManifest)) {
+                $arguments[] = '--highlights';
+                $arguments[] = escapeshellarg($highlightsManifest);
+            }
+
+            $output = shell_exec(implode(' ', $arguments) . ' 2>&1');
+            if (is_file($outputPath) && filesize($outputPath) > 0) {
+                return true;
+            }
+
+            Log::warning('Python PDF export failed, trying Node/FPDI fallback', [
+                'check_id' => $submissionId,
+                'output' => $output,
+            ]);
+        }
+
         $nodeScript = base_path('scripts/merge_pdfs.mjs');
         if (is_file($nodeScript) && $sourcePath && is_file($sourcePath)) {
             @unlink($outputPath);
@@ -463,6 +493,23 @@ class PlagiarismExportService
         $pdf->Output('F', $outputPath);
 
         return is_file($outputPath) && filesize($outputPath) > 0;
+    }
+
+    private function resolvePythonBinary(): string
+    {
+        $configured = trim((string) env('PYTHON_PATH', ''));
+        if ($configured !== '' && is_file($configured)) {
+            return $configured;
+        }
+
+        $projectPython = base_path(PHP_OS_FAMILY === 'Windows'
+            ? '.venv/Scripts/python.exe'
+            : '.venv/bin/python3');
+        if (is_file($projectPython)) {
+            return $projectPython;
+        }
+
+        return PHP_OS_FAMILY === 'Windows' ? 'python' : 'python3';
     }
 
 }
