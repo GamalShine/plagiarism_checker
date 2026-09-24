@@ -243,7 +243,7 @@ class DocumentPageRenderer
             return null;
         }
 
-        if (!filter_var(env('WORD_COM_ENABLED', true), FILTER_VALIDATE_BOOL)) {
+        if (!filter_var(env('WORD_COM_ENABLED', false), FILTER_VALIDATE_BOOL)) {
             return null;
         }
 
