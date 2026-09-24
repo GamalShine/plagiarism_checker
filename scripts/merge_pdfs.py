@@ -93,7 +93,7 @@ def highlight_source_pages(source: pymupdf.Document, highlights: list[dict], dra
             soft_color = soften_color(color)
             annotation = page.add_highlight_annot(quads)
             annotation.set_colors(stroke=soft_color, fill=soft_color)
-            annotation.set_opacity(0.50)
+            annotation.set_opacity(0.34)
             annotation.update()
             if draw_labels and source_index > 0:
                 add_highlight_label(page, quads[0].rect, source_index, soft_color)

@@ -509,7 +509,26 @@ class PlagiarismExportService
             return $projectPython;
         }
 
-        return PHP_OS_FAMILY === 'Windows' ? 'python' : 'python3';
+        if (PHP_OS_FAMILY === 'Windows') {
+            foreach (['py', 'python'] as $command) {
+                $versionArguments = $command === 'py' ? ' -3' : '';
+                $probe = shell_exec($command . $versionArguments . ' -c "import pymupdf" 2>NUL');
+                if ($probe !== null) {
+                    return $command;
+                }
+            }
+
+            return 'python';
+        }
+
+        foreach (['python3', 'python'] as $command) {
+            $probe = shell_exec($command . ' -c "import pymupdf" 2>/dev/null');
+            if ($probe !== null) {
+                return $command;
+            }
+        }
+
+        return 'python3';
     }
 
 }
