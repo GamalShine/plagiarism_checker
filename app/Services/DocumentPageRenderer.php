@@ -11,6 +11,7 @@ use PhpOffice\PhpWord\Settings;
 class DocumentPageRenderer
 {
     private const MAX_PAGES = 200;
+    private const DOCX_RENDER_VERSION = 'native-v4-word-layout';
 
     public function renderPages(string $filePath, int $documentId): array
     {
@@ -120,8 +121,6 @@ class DocumentPageRenderer
             }
         }
 
-        $pdfPath ??= $this->convertDocxWithPhpWord($filePath, $cacheDir);
-
         if ($pdfPath && $pdfPath !== $cachedPdf && is_file($pdfPath)) {
             @copy($pdfPath, $cachedPdf);
         }
@@ -201,7 +200,7 @@ class DocumentPageRenderer
             (string) (filesize($filePath) ?: 0),
             (string) $dpi,
             (string) $jpegQuality,
-            'native-v3-plain-source',
+            self::DOCX_RENDER_VERSION,
             'word-v3-pastel-highlights',
         ]));
 
@@ -226,7 +225,6 @@ class DocumentPageRenderer
             fn () => $this->convertDocxWithMicrosoftWord($filePath, $cacheDir),
             fn () => $this->convertDocxWithLibreOffice($filePath, $cacheDir),
             fn () => $this->convertDocxWithBrowser($filePath, $cacheDir),
-            fn () => $this->convertDocxWithPhpWord($filePath, $cacheDir),
         ] as $convert) {
             $pdf = $convert();
             if ($pdf) {
