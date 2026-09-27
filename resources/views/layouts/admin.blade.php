@@ -30,6 +30,14 @@
         Kelola Link
     </a>
 
+    <a href="{{ route('admin.reports.index') }}" @click="sidebarOpen = false"
+        class="pc-nav-item {{ request()->routeIs('admin.reports.*') ? 'active' : '' }}">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h10m-10 4h6m-9 5 2.5-3H19a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v13z" />
+        </svg>
+        Laporan
+    </a>
+
     <a href="{{ route('admin.users.index') }}" @click="sidebarOpen = false"
         class="pc-nav-item {{ request()->routeIs('admin.users.*') ? 'active' : '' }}">
         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">

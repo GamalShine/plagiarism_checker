@@ -25,7 +25,7 @@
                 <a href="{{ route('templates.index') }}"
                     class="rounded-lg px-3.5 py-2 text-[13px] font-medium text-slate-600 transition hover:bg-slate-50 hover:text-blue-600">Template
                     Jurnal</a>
-                <a href="{{ route('welcome') }}#faq"
+                <a href="{{ route('help') }}"
                     class="rounded-lg px-3.5 py-2 text-[13px] font-medium text-slate-600 transition hover:bg-slate-50 hover:text-blue-600">Bantuan</a>
             </div>
 
@@ -60,7 +60,7 @@
                 <a href="{{ route('templates.index') }}"
                     class="rounded-xl px-3 py-3 text-sm font-medium text-slate-700 transition hover:bg-blue-50 hover:text-blue-600">Template
                     Jurnal</a>
-                <a href="{{ route('welcome') }}#faq"
+                <a href="{{ route('help') }}"
                     class="rounded-xl px-3 py-3 text-sm font-medium text-slate-700 transition hover:bg-blue-50 hover:text-blue-600">Bantuan</a>
                 <a href="{{ route('login') }}"
                     class="mb-3 mt-2 inline-flex items-center justify-center rounded-xl bg-blue-600 px-5 py-3 text-sm font-bold text-white transition hover:bg-blue-700">Masuk</a>

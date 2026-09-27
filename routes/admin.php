@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Admin\DashboardController;
+use App\Http\Controllers\Admin\ContactReportController;
 use App\Http\Controllers\Admin\LinkController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\HistoryController;
@@ -15,6 +16,7 @@ Route::middleware(['auth', 'verified', 'admin'])
     ->name('admin.')
     ->group(function () {
         Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+        Route::get('/reports', [ContactReportController::class, 'index'])->name('reports.index');
 
         Route::prefix('plagiarism')->name('plagiarism.')->group(function () {
             Route::get('/', [PlagiarismController::class, 'index'])->name('index');

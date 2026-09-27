@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\FreeCheckController;
+use App\Http\Controllers\HelpReportController;
 use App\Http\Controllers\GuestLinkController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\WelcomeController;
@@ -9,6 +10,10 @@ use Illuminate\Support\Facades\Route;
 
 Route::get('/', [WelcomeController::class, 'index'])->name('welcome');
 Route::view('/harga', 'pricing')->name('pricing');
+Route::view('/bantuan', 'help')->name('help');
+Route::post('/bantuan/laporan', [HelpReportController::class, 'store'])
+    ->middleware('throttle:5,1')
+    ->name('help.reports.store');
 Route::get('/cekplagiasiturnitin', [FreeCheckController::class, 'index'])->name('free.check.index');
 Route::post('/cekplagiasiturnitin/extract-chapters', [FreeCheckController::class, 'extractChapters'])->name('free.plagiarism.extract_chapters');
 Route::post('/cekplagiasiturnitin/plagiarism', [FreeCheckController::class, 'guestFileCheck'])->name('free.plagiarism.check');

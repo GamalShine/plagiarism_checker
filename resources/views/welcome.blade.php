@@ -22,7 +22,7 @@
             <a href="{{ route('templates.index') }}"
                 class="rounded-lg px-3.5 py-2 text-[13px] font-medium text-slate-600 transition hover:bg-slate-50 hover:text-blue-600">Template
                 Jurnal</a>
-            <a href="#faq"
+            <a href="{{ route('help') }}"
                 class="rounded-lg px-3.5 py-2 text-[13px] font-medium text-slate-600 transition hover:bg-slate-50 hover:text-blue-600">Bantuan</a>
         </div>
 
@@ -57,7 +57,7 @@
             <a href="{{ route('templates.index') }}"
                 class="rounded-xl px-3 py-3 text-sm font-medium text-slate-700 transition hover:bg-blue-50 hover:text-blue-600">Template
                 Jurnal</a>
-            <a href="#faq"
+            <a href="{{ route('help') }}"
                 class="rounded-xl px-3 py-3 text-sm font-medium text-slate-700 transition hover:bg-blue-50 hover:text-blue-600">Bantuan</a>
             <a href="{{ route('login') }}"
                 class="mt-2 mb-3 inline-flex items-center justify-center rounded-xl bg-blue-600 px-5 py-3 text-sm font-bold text-white transition hover:bg-blue-700">Masuk</a>
@@ -115,9 +115,6 @@
             </div>
 
             <div class="relative mt-6 w-full sm:mt-10 sm:justify-self-end sm:pl-4">
-                <div
-                    class="absolute left-1/2 top-1/2 h-[115%] w-[110%] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#dfeeff]">
-                </div>
                 <div
                     class="relative mx-auto w-full max-w-[520px] overflow-hidden rounded-[22px] border border-slate-200 bg-white shadow-[0_18px_40px_rgba(15,23,42,0.08)] ring-1 ring-blue-100">
                     <div class="flex items-center justify-between bg-blue-600 px-4 py-3.5 text-white">
