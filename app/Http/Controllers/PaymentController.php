@@ -54,8 +54,10 @@ class PaymentController extends Controller
             ->whereNotNull('package_key')
             ->firstOrFail();
 
-        if ($payment->isPending()) {
-            $this->markPaidAndQueue($payment);
+        if ($payment->status !== 'paid') {
+            return redirect()
+                ->route('user.payment.package', $payment->package_key)
+                ->with('payment_pending_notice', 'Pembayaran masih menunggu konfirmasi DOKU. Akses fitur akan terbuka setelah pembayaran terverifikasi.');
         }
 
         return redirect()->route('user.dashboard');
@@ -170,6 +172,31 @@ class PaymentController extends Controller
     public function notification(Request $request)
     {
         $rawBody = $request->getContent();
+        $receivedClientId = (string) $request->header('Client-Id', '');
+        $requestId = (string) $request->header('Request-Id', '');
+        $requestTimestamp = (string) $request->header('Request-Timestamp', '');
+        $signature = (string) $request->header('Signature', '');
+        $requestTarget = parse_url($request->getRequestUri(), PHP_URL_PATH) ?: '/';
+
+        if (
+            ! hash_equals((string) config('doku.client_id', ''), $receivedClientId)
+            || $requestId === ''
+            || $requestTimestamp === ''
+            || $signature === ''
+            || ! $this->dokuService->verifyNotificationSignature(
+                $receivedClientId,
+                $requestId,
+                $requestTimestamp,
+                $requestTarget,
+                $rawBody,
+                $signature,
+            )
+        ) {
+            Log::warning('Rejected DOKU notification with invalid signature or credentials.');
+
+            return response()->json(['status' => 'invalid_signature'], 401);
+        }
+
         $payload = json_decode($rawBody, true) ?: $request->all();
 
         Log::info('DOKU Notification Received: ', ['payload' => $payload]);

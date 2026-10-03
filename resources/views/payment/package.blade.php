@@ -9,6 +9,9 @@
     @if (session('error'))
         <div class="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{{ session('error') }}</div>
     @endif
+    @if (session('payment_pending_notice'))
+        <div class="mb-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">{{ session('payment_pending_notice') }}</div>
+    @endif
 
     <div class="pc-card overflow-hidden">
         <div class="border-b border-slate-200 bg-orange-50 px-6 py-5 sm:px-8">

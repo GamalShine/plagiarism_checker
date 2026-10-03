@@ -40,6 +40,10 @@ class AuthenticatedSessionController extends Controller
             return redirect()->route('admin.dashboard');
         }
 
+        if ($user?->pending_package_key && config("plans.{$user->pending_package_key}")) {
+            return redirect()->route('user.payment.package', $user->pending_package_key);
+        }
+
         $packageKey = session()->pull('selected_package');
 
         return $packageKey && config("plans.{$packageKey}")

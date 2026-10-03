@@ -22,7 +22,7 @@ Route::middleware('auth')
             ->name('payment.package.finish');
     });
 
-Route::middleware(['auth', 'verified'])
+Route::middleware(['auth', 'verified', 'package.payment'])
     ->prefix('user')
     ->name('user.')
     ->group(function () {

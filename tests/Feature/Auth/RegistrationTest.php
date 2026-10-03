@@ -39,6 +39,10 @@ class RegistrationTest extends TestCase
             ]);
 
         $this->assertAuthenticated();
+        $this->assertDatabaseHas('users', [
+            'email' => 'package-user@example.com',
+            'pending_package_key' => 'hemat-3',
+        ]);
         $response->assertRedirect(route('user.payment.package', 'hemat-3', absolute: false));
         $this->get(route('user.payment.package', 'hemat-3', absolute: false))->assertOk();
     }

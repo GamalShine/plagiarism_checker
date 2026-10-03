@@ -12,7 +12,16 @@ class User extends Authenticatable
 {
     use HasFactory, Notifiable;
 
-    protected $fillable = ['name', 'email', 'password', 'role'];
+    protected $fillable = [
+        'name',
+        'email',
+        'password',
+        'role',
+        'package_key',
+        'package_credits',
+        'package_expires_at',
+        'pending_package_key',
+    ];
 
     protected $hidden = ['password', 'remember_token'];
 
@@ -21,6 +30,8 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'package_credits' => 'integer',
+            'package_expires_at' => 'datetime',
         ];
     }
 
@@ -32,6 +43,14 @@ class User extends Authenticatable
     public function isMember(): bool
     {
         return $this->role === 'member';
+    }
+
+    public function hasActivePackage(): bool
+    {
+        return $this->package_key !== null
+            && $this->package_credits > 0
+            && $this->package_expires_at !== null
+            && $this->package_expires_at->isFuture();
     }
 
     public function createdLinks(): HasMany
