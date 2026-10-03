@@ -28,4 +28,18 @@ class RegistrationTest extends TestCase
         $this->assertAuthenticated();
         $response->assertRedirect(route('user.dashboard', absolute: false));
     }
+
+    public function test_new_users_with_a_selected_package_are_redirected_to_checkout(): void
+    {
+        $response = $this->withSession(['selected_package' => 'hemat-3'])
+            ->post('/register', [
+                'email' => 'package-user@example.com',
+                'password' => 'password',
+                'password_confirmation' => 'password',
+            ]);
+
+        $this->assertAuthenticated();
+        $response->assertRedirect(route('user.payment.package', 'hemat-3', absolute: false));
+        $this->get(route('user.payment.package', 'hemat-3', absolute: false))->assertOk();
+    }
 }

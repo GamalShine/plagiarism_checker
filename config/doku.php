@@ -17,6 +17,7 @@ return [
     'secret_key'     => env('DOKU_SECRET_KEY', 'SK-zFVwhMBdIZH81aEBxNrz'),
     'api_key'        => env('DOKU_API_KEY', 'doku_key_f22ec66aef6f41a2b809c5206fca539d'),
     'is_production'  => env('DOKU_IS_PRODUCTION', false),
+    'callback_base_url' => env('DOKU_CALLBACK_BASE_URL', env('APP_URL', 'http://localhost')),
 
     /*
     |--------------------------------------------------------------------------

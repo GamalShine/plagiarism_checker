@@ -33,10 +33,12 @@ class DokuService
         $url = $this->baseUrl . $targetPath;
         $requestId = (string) Str::uuid();
         $requestTimestamp = gmdate('Y-m-d\TH:i:s\Z');
-        $publicAppUrl = rtrim((string) config('app.url'), '/');
+        $publicAppUrl = rtrim((string) config('doku.callback_base_url', config('app.url')), '/');
         $isGuestPayment = filled($payment->guest_token);
         $callbackToken = $isGuestPayment ? $payment->guest_token : $payment->order_id;
-        $finishRoute = $isGuestPayment ? 'guest.payment.finish' : 'user.payment.finish';
+        $finishRoute = $isGuestPayment
+            ? 'guest.payment.finish'
+            : ($payment->package_key ? 'user.payment.package.finish' : 'user.payment.finish');
         $cancelRoute = $isGuestPayment ? 'guest.payment.error' : 'user.payment.error';
         $finishPath = route($finishRoute, $callbackToken, false);
         $cancelPath = route($cancelRoute, $callbackToken, false);

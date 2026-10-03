@@ -10,6 +10,18 @@ use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\SettingController;
 use Illuminate\Support\Facades\Route;
 
+Route::middleware('auth')
+    ->prefix('user')
+    ->name('user.')
+    ->group(function () {
+        Route::get('/payment/package/{packageKey}', [PaymentController::class, 'packageCheckout'])
+            ->name('payment.package');
+        Route::post('/payment/package/{packageKey}', [PaymentController::class, 'initiatePackage'])
+            ->name('payment.package.pay');
+        Route::get('/payment/package/finish/{orderId}', [PaymentController::class, 'packageFinish'])
+            ->name('payment.package.finish');
+    });
+
 Route::middleware(['auth', 'verified'])
     ->prefix('user')
     ->name('user.')

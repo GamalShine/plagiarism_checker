@@ -46,6 +46,21 @@ class PaymentController extends Controller
         return view('payment.package', compact('package', 'packageKey'));
     }
 
+    public function packageFinish(string $orderId)
+    {
+        $payment = Payment::query()
+            ->where('order_id', $orderId)
+            ->where('user_id', auth()->id())
+            ->whereNotNull('package_key')
+            ->firstOrFail();
+
+        if ($payment->isPending()) {
+            $this->markPaidAndQueue($payment);
+        }
+
+        return redirect()->route('user.dashboard');
+    }
+
     public function initiatePackage(string $packageKey)
     {
         $package = config("plans.{$packageKey}");
