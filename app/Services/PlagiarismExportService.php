@@ -25,9 +25,12 @@ class PlagiarismExportService
         @ini_set('memory_limit', '1024M');
         @set_time_limit(0);
 
-        if ($this->shouldUseLightweightPdfExport()) {
-            return $this->renderSummaryPdf($check, $downloadName, $includeAllSources);
-        }
+        return $this->renderNoPythonPdf(
+            $check,
+            $highlightedText,
+            $downloadName,
+            $includeAllSources,
+        );
 
         $tempDir = storage_path('app/temp/exports/' . $check->id . '_' . time());
         File::ensureDirectoryExists($tempDir);
@@ -194,6 +197,7 @@ class PlagiarismExportService
             ->setOptions([
                 'isHtml5ParserEnabled' => true,
                 'isRemoteEnabled' => true,
+                'defaultFont' => 'Arial',
                 'chroot' => base_path(),
             ])
             ->download($downloadName);
@@ -216,6 +220,7 @@ class PlagiarismExportService
             ->setOptions([
                 'isHtml5ParserEnabled' => false,
                 'isRemoteEnabled' => false,
+                'defaultFont' => 'Arial',
                 'chroot' => base_path(),
             ])
             ->download($downloadName);
@@ -250,48 +255,82 @@ class PlagiarismExportService
 
     public function shouldUseLightweightPdfExport(): bool
     {
-        return filter_var(env('PDF_LIGHTWEIGHT', false), FILTER_VALIDATE_BOOL)
-            || ! function_exists('shell_exec');
+        return filter_var(env('PDF_LIGHTWEIGHT', false), FILTER_VALIDATE_BOOL);
     }
 
     private function renderNoPythonPdf(
         PlagiarismCheck $check,
+        string $highlightedText,
         string $downloadName,
         bool $includeAllSources = false,
     ): Response {
-        if ($this->shouldUseLightweightPdfExport()) {
-            return $this->renderSummaryPdf($check, $downloadName, $includeAllSources);
-        }
-
         $filePath = $check->document->file_path
             ? Storage::disk('public')->path($check->document->file_path)
             : '';
 
-        $sourcePdf = $this->documentPageRenderer->resolveSourcePdfWithoutShell(
-            $filePath,
-            $check->document->id,
-            $check->highlights->all(),
-        );
+        $sourceIndexMap = [];
+        foreach ($check->sources as $index => $source) {
+            $sourceIndexMap[$source->id] = (int) ($source->turnitin_index ?? ($index + 1));
+        }
 
-        if (! $sourcePdf) {
-            return $this->renderSummaryPdf($check, $downloadName, $includeAllSources);
+        if (strtolower(pathinfo($filePath, PATHINFO_EXTENSION)) === 'docx') {
+            $documentHtml = $this->documentPageRenderer->renderDocxHtml($filePath, $check->document->id);
+            if ($documentHtml !== null) {
+                $highlightedText = $this->highlightDocumentHtml(
+                    $documentHtml,
+                    $check->highlights->all(),
+                    $sourceIndexMap,
+                );
+            }
+        }
+
+        $highlightedText = $this->justifyTwelvePointParagraphs($highlightedText);
+        $highlightedText = $this->formatHeadingHierarchy($highlightedText);
+
+        // PhpWord places named-page selection on the body as inline styles
+        // (`style="page: page1"`), not only inside the extracted stylesheet.
+        // Remove it from the actual HTML before Dompdf paginates; otherwise
+        // its named page can bypass export_document's default @page margins.
+        $highlightedText = preg_replace('/\bpage\s*:\s*page\d+\s*;?/i', '', $highlightedText) ?? $highlightedText;
+
+        $documentStyles = '';
+        if (preg_match_all('/<style\b[^>]*>(.*?)<\/style>/is', $highlightedText, $styleMatches)) {
+            $documentStyles = implode("\n", $styleMatches[1]);
+            $highlightedText = preg_replace('/<style\b[^>]*>.*?<\/style>/is', '', $highlightedText) ?? $highlightedText;
+
+            // Ignore imported page rules too; the export template owns the
+            // final page geometry and sets the intended asymmetric margins.
+            $documentStyles = preg_replace('/@page\b[^{}]*\{[^}]*\}/is', '', $documentStyles) ?? $documentStyles;
         }
 
         $tempDir = storage_path('app/temp/exports/no-python_' . $check->id . '_' . time());
         File::ensureDirectoryExists($tempDir);
         $coverPath = $tempDir . DIRECTORY_SEPARATOR . 'cover.pdf';
+        $documentPath = $tempDir . DIRECTORY_SEPARATOR . 'document.pdf';
         $reportPath = $tempDir . DIRECTORY_SEPARATOR . 'report.pdf';
         $mergedPath = $tempDir . DIRECTORY_SEPARATOR . 'merged.pdf';
 
         try {
+            $this->ensureArialFont();
             $this->renderPartialPdf('plagiarism.export_cover', compact('check'), $coverPath);
+            $pdfParts = [$coverPath];
+
+            if (trim($highlightedText) !== '') {
+                $this->renderPartialPdf('plagiarism.export_document', [
+                    'documentHtml' => $highlightedText,
+                    'documentStyles' => $documentStyles,
+                ], $documentPath);
+                $pdfParts[] = $documentPath;
+            }
+
             $this->renderPartialPdf('plagiarism.export_report', [
                 'check' => $check,
                 'highlightedText' => '',
                 'includeAllSources' => $includeAllSources,
             ], $reportPath);
+            $pdfParts[] = $reportPath;
 
-            if ($this->mergePdfFiles($mergedPath, [$coverPath, $sourcePdf, $reportPath])) {
+            if ($this->mergePdfFiles($mergedPath, $pdfParts)) {
                 return response()->download($mergedPath, $downloadName, [
                     'Content-Type' => 'application/pdf',
                 ])->deleteFileAfterSend(true);
@@ -303,10 +342,419 @@ class PlagiarismExportService
             ]);
         } finally {
             @unlink($coverPath);
+            @unlink($documentPath);
             @unlink($reportPath);
         }
 
         return $this->renderSummaryPdf($check, $downloadName, $includeAllSources);
+    }
+
+    private function justifyTwelvePointParagraphs(string $html): string
+    {
+        if ($html === '' || ! class_exists(\DOMDocument::class)) {
+            return $html;
+        }
+
+        $dom = new \DOMDocument('1.0', 'UTF-8');
+        @$dom->loadHTML('<?xml encoding="UTF-8"><div id="justify-root">' . $html . '</div>', LIBXML_NOERROR | LIBXML_NOWARNING);
+        $root = $dom->getElementById('justify-root');
+        if (! $root) {
+            return $html;
+        }
+
+        $xpath = new \DOMXPath($dom);
+        foreach ($xpath->query('.//p', $root) ?: [] as $paragraph) {
+            $elements = [$paragraph];
+            foreach ($paragraph->getElementsByTagName('*') as $child) {
+                $elements[] = $child;
+            }
+
+            $hasTwelvePointText = false;
+            foreach ($elements as $element) {
+                if (preg_match('/(?:^|;)\s*font-size\s*:\s*12(?:\.0+)?pt\b/i', $element->getAttribute('style'))) {
+                    $hasTwelvePointText = true;
+                    break;
+                }
+            }
+
+            if (! $hasTwelvePointText) {
+                continue;
+            }
+
+            $style = (string) $paragraph->getAttribute('style');
+            $style = preg_replace('/(?:^|;)\s*text-align\s*:[^;]*/i', '', $style) ?? $style;
+            $style = trim($style, " ;\t\n\r\0\x0B");
+            $paragraph->setAttribute('style', ($style !== '' ? $style . '; ' : '') . 'text-align: justify !important;');
+        }
+
+        $result = '';
+        foreach ($root->childNodes as $child) {
+            $result .= $dom->saveHTML($child);
+        }
+
+        return $result !== '' ? $result : $html;
+    }
+
+    private function formatHeadingHierarchy(string $html): string
+    {
+        if ($html === '' || ! class_exists(\DOMDocument::class)) {
+            return $html;
+        }
+
+        $dom = new \DOMDocument('1.0', 'UTF-8');
+        @$dom->loadHTML('<?xml encoding="UTF-8"><div id="heading-root">' . $html . '</div>', LIBXML_NOERROR | LIBXML_NOWARNING);
+        $root = $dom->getElementById('heading-root');
+        if (! $root) {
+            return $html;
+        }
+
+        $xpath = new \DOMXPath($dom);
+        $counters = [2 => 0, 3 => 0, 4 => 0];
+        $currentBodyLevel = 0;
+        $insideContents = false;
+
+        foreach ($xpath->query('.//p', $root) ?: [] as $paragraph) {
+            $level = (int) $paragraph->getAttribute('data-docx-heading-level');
+            if ($level >= 1 && $level <= 4) {
+                $headingText = mb_strtolower(trim($paragraph->textContent));
+                $currentBodyLevel = $level;
+                if ($level === 1) {
+                    $counters = [2 => 0, 3 => 0, 4 => 0];
+                    if (preg_match('/^daftar isi\b/u', $headingText)) {
+                        $insideContents = true;
+                    } elseif (preg_match('/^bab\s+i\b/u', $headingText)) {
+                        $insideContents = false;
+                    }
+                } elseif ($level === 2) {
+                    $counters[2]++;
+                    $counters[3] = 0;
+                    $counters[4] = 0;
+                } elseif ($level === 3) {
+                    $counters[3]++;
+                    $counters[4] = 0;
+                } else {
+                    $counters[4]++;
+                }
+
+                $classNames = preg_split('/\s+/', trim($paragraph->getAttribute('class'))) ?: [];
+                $classNames[] = 'doc-heading';
+                $classNames[] = 'doc-heading-' . $level;
+                $paragraph->setAttribute('class', implode(' ', array_unique(array_filter($classNames))));
+
+                $paragraphStyle = (string) $paragraph->getAttribute('style');
+                $paragraphStyle = $this->replaceInlineStyleProperty($paragraphStyle, 'text-align', $level === 1 ? 'center' : 'left');
+                $paragraphStyle = $this->replaceInlineStyleProperty($paragraphStyle, 'font-weight', 'bold');
+                if ($level === 1) {
+                    // Content area is 0.2in right of the physical page center
+                    // because the left and right page margins are asymmetric.
+                    $paragraphStyle = $this->replaceInlineStyleProperty($paragraphStyle, 'position', 'relative');
+                    $paragraphStyle = $this->replaceInlineStyleProperty($paragraphStyle, 'left', '-0.2in');
+                }
+                $leftIndent = match ($level) {
+                    3 => '0.5in',
+                    4 => '1in',
+                    default => '0',
+                };
+                $paragraphStyle = $this->replaceInlineStyleProperty($paragraphStyle, 'margin-left', $leftIndent);
+                $paragraphStyle = $this->replaceInlineStyleProperty($paragraphStyle, 'text-indent', '0');
+                $paragraph->setAttribute('style', $paragraphStyle);
+
+                foreach ($paragraph->getElementsByTagName('*') as $child) {
+                    $child->setAttribute(
+                        'style',
+                        $this->replaceInlineStyleProperty((string) $child->getAttribute('style'), 'font-weight', 'bold'),
+                    );
+                }
+
+                if ($level >= 2) {
+                    $label = match ($level) {
+                        2 => $this->alphabeticHeadingLabel($counters[2], true) . '.',
+                        3 => $counters[3] . '.',
+                        4 => $this->alphabeticHeadingLabel($counters[4], false) . ')',
+                    };
+                    $this->removeExistingHeadingNumber($paragraph, $level, $xpath);
+                    $number = $dom->createElement('span');
+                    $number->setAttribute('class', 'doc-heading-number');
+                    $numberWeight = $level === 4 ? 'normal' : 'bold';
+                    $number->setAttribute('style', 'font-weight: ' . $numberWeight . ' !important; display: inline-block; min-width: 0.6in; white-space: nowrap;');
+                    $number->appendChild($dom->createTextNode($label . '  '));
+                    $paragraph->insertBefore($number, $paragraph->firstChild);
+                }
+
+                continue;
+            }
+
+            if ($currentBodyLevel === 0
+                || $insideContents
+                || $paragraph->hasAttribute('data-docx-list-number')
+                || $paragraph->parentNode instanceof \DOMElement && strtolower($paragraph->parentNode->tagName) === 'table'
+                || $xpath->query('ancestor::table', $paragraph)?->length > 0
+                || preg_match('/^toc(?:\b|\d)/i', $paragraph->getAttribute('data-docx-style'))
+                || ! $this->paragraphContainsTwelvePointText($paragraph)) {
+                continue;
+            }
+
+            $bodyIndent = match ($currentBodyLevel) {
+                3 => '0.5in',
+                4 => '1in',
+                default => '0',
+            };
+            $paragraphStyle = (string) $paragraph->getAttribute('style');
+            $paragraphStyle = $this->replaceInlineStyleProperty($paragraphStyle, 'margin-left', $bodyIndent);
+            $paragraphStyle = $this->replaceInlineStyleProperty($paragraphStyle, 'text-indent', '0.5in');
+            $paragraph->setAttribute('style', $paragraphStyle);
+        }
+
+        $result = '';
+        foreach ($root->childNodes as $child) {
+            $result .= $dom->saveHTML($child);
+        }
+
+        return $result !== '' ? $result : $html;
+    }
+
+    private function paragraphContainsTwelvePointText(\DOMElement $paragraph): bool
+    {
+        $elements = [$paragraph];
+        foreach ($paragraph->getElementsByTagName('*') as $child) {
+            $elements[] = $child;
+        }
+
+        foreach ($elements as $element) {
+            if (preg_match('/(?:^|;)\s*font-size\s*:\s*12(?:\.0+)?pt\b/i', $element->getAttribute('style'))) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function replaceInlineStyleProperty(string $style, string $property, string $value): string
+    {
+        $pattern = '/(?:^|;)\s*' . preg_quote($property, '/') . '\s*:[^;]*/i';
+        $style = preg_replace($pattern, '', $style) ?? $style;
+        $style = trim($style, " ;\t\n\r\0\x0B");
+
+        return ($style !== '' ? $style . '; ' : '') . $property . ': ' . $value . ' !important;';
+    }
+
+    private function alphabeticHeadingLabel(int $number, bool $uppercase): string
+    {
+        $label = '';
+        for ($value = max(1, $number); $value > 0; $value = intdiv($value - 1, 26)) {
+            $label = chr(($uppercase ? 65 : 97) + (($value - 1) % 26)) . $label;
+        }
+
+        return $label;
+    }
+
+    private function removeExistingHeadingNumber(\DOMElement $paragraph, int $level, \DOMXPath $xpath): void
+    {
+        $text = $paragraph->textContent;
+        $pattern = match ($level) {
+            2 => '/^\s*[A-Z]\.\s*/u',
+            3 => '/^\s*\d+(?:\.\d+)*[.)]\s*/u',
+            4 => '/^\s*[a-z]\)\s*/iu',
+            default => null,
+        };
+
+        if ($pattern === null || ! preg_match($pattern, $text, $matches)) {
+            return;
+        }
+
+        $remaining = mb_strlen($matches[0]);
+        foreach ($xpath->query('.//text()', $paragraph) ?: [] as $textNode) {
+            if ($remaining <= 0) {
+                break;
+            }
+
+            $textLength = mb_strlen($textNode->nodeValue ?? '');
+            if ($textLength <= $remaining) {
+                $textNode->nodeValue = '';
+                $remaining -= $textLength;
+            } else {
+                $textNode->nodeValue = mb_substr((string) $textNode->nodeValue, $remaining);
+                $remaining = 0;
+            }
+        }
+    }
+
+    private function highlightDocumentHtml(string $html, array $highlights, array $sourceIndexMap): string
+    {
+        if ($html === '' || $highlights === [] || ! class_exists(\DOMDocument::class)) {
+            return $html;
+        }
+
+        $dom = new \DOMDocument('1.0', 'UTF-8');
+        @$dom->loadHTML('<?xml encoding="UTF-8"><div id="document-root">' . $html . '</div>', LIBXML_NOERROR | LIBXML_NOWARNING);
+        $root = $dom->getElementById('document-root');
+        if (! $root) {
+            return $html;
+        }
+
+        $items = collect($highlights)
+            ->filter(fn ($highlight) => mb_strlen(trim((string) ($highlight->original_text ?? ''))) >= 4)
+            ->sortByDesc(fn ($highlight) => mb_strlen((string) $highlight->original_text));
+
+        foreach ($root->getElementsByTagName('*') as $element) {
+            if (in_array(strtolower($element->nodeName), ['script', 'style', 'mark'], true)) {
+                continue;
+            }
+
+            foreach (iterator_to_array($element->childNodes) as $child) {
+                if ($child->nodeType !== XML_TEXT_NODE || trim($child->nodeValue) === '') {
+                    continue;
+                }
+
+                $this->highlightTextNode($dom, $element, $child, $items, $sourceIndexMap);
+            }
+        }
+
+        $result = '';
+        foreach ($root->childNodes as $child) {
+            $result .= $dom->saveHTML($child);
+        }
+
+        return $result !== '' ? $result : $html;
+    }
+
+    private function highlightTextNode(\DOMDocument $dom, \DOMElement $parent, \DOMText $textNode, $items, array $sourceIndexMap): void
+    {
+        $sourcePalette = [
+            '#DE60E5',
+            '#D763FF',
+            '#25B3B3',
+            '#0A9D02',
+            '#A47108',
+            '#7A2F08',
+            '#0A476F',
+            '#9C449B',
+            '#808080',
+        ];
+        $text = $textNode->nodeValue;
+        $cursor = 0;
+        $matches = [];
+
+        foreach ($items as $highlight) {
+            $cleanText = trim(preg_replace('/\s+/u', ' ', (string) $highlight->original_text) ?? '');
+            if ($cleanText === '') {
+                continue;
+            }
+
+            $words = array_values(array_filter(explode(' ', $cleanText), fn ($word) => mb_strlen($word) > 2));
+            $phrases = [$cleanText];
+            if (count($words) >= 4) {
+                $phrases[] = implode(' ', array_slice($words, 0, 6));
+                if (count($words) >= 10) {
+                    $phrases[] = implode(' ', array_slice($words, 4, 6));
+                }
+            }
+
+            foreach (array_unique($phrases) as $needle) {
+                foreach ($this->normalizedTextMatches($text, $needle) as [$start, $end]) {
+                    $matches[] = [
+                        'start' => $start,
+                        'end' => $end,
+                        'highlight' => $highlight,
+                    ];
+                }
+            }
+        }
+
+        if ($matches === []) {
+            return;
+        }
+
+        usort($matches, fn ($left, $right) => $left['start'] <=> $right['start'] ?: $right['end'] <=> $left['end']);
+        $selected = [];
+        foreach ($matches as $match) {
+            if ($match['start'] < $cursor) {
+                continue;
+            }
+            $selected[] = $match;
+            $cursor = $match['end'];
+        }
+
+        if ($selected === []) {
+            return;
+        }
+
+        $fragment = $dom->createDocumentFragment();
+        $cursor = 0;
+        foreach ($selected as $match) {
+            if ($match['start'] > $cursor) {
+                $fragment->appendChild($dom->createTextNode(mb_substr($text, $cursor, $match['start'] - $cursor)));
+            }
+
+            $highlight = $match['highlight'];
+            $sourceId = $highlight->plagiarism_source_id;
+            $sourceIndex = $sourceIndexMap[$sourceId] ?? '*';
+            $paletteIndex = is_numeric($sourceIndex) ? max(1, (int) $sourceIndex) - 1 : 0;
+            $color = $sourcePalette[$paletteIndex % count($sourcePalette)];
+            $mark = $dom->createElement('mark');
+            $mark->setAttribute('class', 't-highlight');
+            $mark->setAttribute('data-source-id', (string) $sourceId);
+            $mark->setAttribute('data-source-index', (string) $sourceIndex);
+            $mark->setAttribute('data-source-color', $color);
+            $mark->setAttribute('style', 'background-color: ' . $color . '33; border-bottom: 2px solid ' . $color . ';');
+            $badge = $dom->createElement('span');
+            $badge->setAttribute('class', 't-badge t-badge-main');
+            $badge->setAttribute('style', 'background-color: ' . $color . '; margin-left: 1em;');
+            $badge->appendChild($dom->createTextNode((string) $sourceIndex));
+            $mark->appendChild($badge);
+            $mark->appendChild($dom->createTextNode(mb_substr($text, $match['start'], $match['end'] - $match['start'])));
+            $fragment->appendChild($mark);
+            $cursor = $match['end'];
+        }
+
+        if ($cursor < mb_strlen($text)) {
+            $fragment->appendChild($dom->createTextNode(mb_substr($text, $cursor)));
+        }
+
+        $parent->replaceChild($fragment, $textNode);
+    }
+
+    /** @return array<int, array{0: int, 1: int}> */
+    private function normalizedTextMatches(string $text, string $needle): array
+    {
+        $normalizedText = '';
+        $positions = [];
+        $length = mb_strlen($text);
+        $inWhitespace = false;
+
+        for ($index = 0; $index < $length; $index++) {
+            $character = mb_substr($text, $index, 1);
+            if (preg_match('/\s/u', $character) === 1) {
+                if ($normalizedText !== '' && ! $inWhitespace) {
+                    $positions[] = $index;
+                    $normalizedText .= ' ';
+                }
+                $inWhitespace = true;
+                continue;
+            }
+
+            $positions[] = $index;
+            $normalizedText .= $character;
+            $inWhitespace = false;
+        }
+
+        $normalizedNeedle = trim(preg_replace('/\s+/u', ' ', $needle) ?? '');
+        if ($normalizedNeedle === '' || $normalizedText === '') {
+            return [];
+        }
+
+        $matches = [];
+        $offset = 0;
+        $needleLength = mb_strlen($normalizedNeedle);
+        while (($position = mb_stripos($normalizedText, $normalizedNeedle, $offset)) !== false) {
+            $endPosition = $position + $needleLength - 1;
+            if (isset($positions[$position], $positions[$endPosition])) {
+                $matches[] = [$positions[$position], $positions[$endPosition] + 1];
+            }
+            $offset = $position + max(1, $needleLength);
+        }
+
+        return $matches;
     }
 
     private function mergePdfFiles(string $outputPath, array $pdfPaths): bool
@@ -346,6 +794,7 @@ class PlagiarismExportService
             ->setOptions([
                 'isHtml5ParserEnabled' => true,
                 'isRemoteEnabled' => true,
+                'defaultFont' => 'Arial',
                 'chroot' => base_path(),
             ])
             ->save($outputPath);
@@ -368,6 +817,21 @@ class PlagiarismExportService
         }
     }
 
+    private function ensureArialFont(): void
+    {
+        $fontDirectory = storage_path('app/fonts');
+        File::ensureDirectoryExists($fontDirectory);
+
+        foreach (['arial.ttf', 'arialbd.ttf'] as $fontName) {
+            $fontPath = $fontDirectory . DIRECTORY_SEPARATOR . $fontName;
+            $systemFont = 'C:\\Windows\\Fonts\\' . $fontName;
+
+            if (! is_file($fontPath) && is_file($systemFont)) {
+                @copy($systemFont, $fontPath);
+            }
+        }
+    }
+
     private function mergePdfs(
         string $outputPath,
         string $coverPath,
@@ -377,63 +841,6 @@ class PlagiarismExportService
         ?string $highlightsManifest = null,
         ?string $submissionId = null
     ): bool {
-        $pythonScript = base_path('scripts/merge_pdfs.py');
-        if (is_file($pythonScript) && $sourcePath && is_file($sourcePath)) {
-            @unlink($outputPath);
-            $python = $this->resolvePythonBinary();
-            $arguments = [
-                escapeshellarg($python),
-                escapeshellarg($pythonScript),
-                escapeshellarg($outputPath),
-                '--cover', escapeshellarg($coverPath),
-                '--source', escapeshellarg($sourcePath),
-                '--report', escapeshellarg($reportPath),
-            ];
-
-            if ($highlightsManifest && is_file($highlightsManifest)) {
-                $arguments[] = '--highlights';
-                $arguments[] = escapeshellarg($highlightsManifest);
-            }
-
-            $output = shell_exec(implode(' ', $arguments) . ' 2>&1');
-            if (is_file($outputPath) && filesize($outputPath) > 0) {
-                return true;
-            }
-
-            Log::warning('Python PDF export failed, trying Node/FPDI fallback', [
-                'check_id' => $submissionId,
-                'output' => $output,
-            ]);
-        }
-
-        $nodeScript = base_path('scripts/merge_pdfs.mjs');
-        if (is_file($nodeScript) && $sourcePath && is_file($sourcePath)) {
-            @unlink($outputPath);
-            $arguments = [
-                'node',
-                escapeshellarg($nodeScript),
-                escapeshellarg($outputPath),
-                '--cover', escapeshellarg($coverPath),
-                '--source', escapeshellarg($sourcePath),
-                '--report', escapeshellarg($reportPath),
-            ];
-
-            if ($highlightsManifest && is_file($highlightsManifest)) {
-                $arguments[] = '--highlights';
-                $arguments[] = escapeshellarg($highlightsManifest);
-            }
-
-            $output = shell_exec(implode(' ', $arguments) . ' 2>&1');
-            if (is_file($outputPath) && filesize($outputPath) > 0) {
-                return true;
-            }
-
-            Log::warning('Node PDF merge failed, trying FPDI fallback', [
-                'check_id' => $submissionId,
-                'output' => $output,
-            ]);
-        }
-
         $pdf = new Fpdi();
         $importedPage = false;
         $sourcePdfPaths = [];
@@ -493,42 +900,6 @@ class PlagiarismExportService
         $pdf->Output('F', $outputPath);
 
         return is_file($outputPath) && filesize($outputPath) > 0;
-    }
-
-    private function resolvePythonBinary(): string
-    {
-        $configured = trim((string) env('PYTHON_PATH', ''));
-        if ($configured !== '' && is_file($configured)) {
-            return $configured;
-        }
-
-        $projectPython = base_path(PHP_OS_FAMILY === 'Windows'
-            ? '.venv/Scripts/python.exe'
-            : '.venv/bin/python3');
-        if (is_file($projectPython)) {
-            return $projectPython;
-        }
-
-        if (PHP_OS_FAMILY === 'Windows') {
-            foreach (['py', 'python'] as $command) {
-                $versionArguments = $command === 'py' ? ' -3' : '';
-                $probe = shell_exec($command . $versionArguments . ' -c "import pymupdf" 2>NUL');
-                if ($probe !== null) {
-                    return $command;
-                }
-            }
-
-            return 'python';
-        }
-
-        foreach (['python3', 'python'] as $command) {
-            $probe = shell_exec($command . ' -c "import pymupdf" 2>/dev/null');
-            if ($probe !== null) {
-                return $command;
-            }
-        }
-
-        return 'python3';
     }
 
 }

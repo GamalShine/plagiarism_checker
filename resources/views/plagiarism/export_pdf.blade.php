@@ -10,7 +10,7 @@
         }
 
         body {
-            font-family: Helvetica, Arial, 'Helvetica Neue', sans-serif;
+            font-family: 'Times New Roman', Times, serif;
             color: #1f2937;
             line-height: 1.5;
             margin: 0;
@@ -138,6 +138,7 @@
         /* ===== TURNITIN-STYLE REPORT PAGE ===== */
         .file-header {
             font-size: 20px;
+            font-family: Arial, Helvetica, sans-serif;
             font-weight: 400;
             color: #111827;
             padding-bottom: 4px;
@@ -149,6 +150,7 @@
 
         .report-label {
             font-size: 10px;
+            font-family: Arial, Helvetica, sans-serif;
             text-transform: uppercase;
             letter-spacing: 0.8px;
             color: #4b5563;
@@ -162,6 +164,7 @@
 
         .summary-grid {
             display: table;
+            font-family: Arial, Helvetica, sans-serif;
             width: 100%;
             table-layout: fixed;
             border-collapse: collapse;
@@ -185,6 +188,7 @@
 
         .summary-value {
             font-size: 44px;
+            font-family: Arial, Helvetica, sans-serif;
             font-weight: 400;
             color: #111827;
             line-height: 1;
@@ -202,6 +206,7 @@
 
             ;
             font-size: 56px;
+            font-family: Arial, Helvetica, sans-serif;
             font-weight: 400;
             margin: 0;
             padding: 0;
@@ -209,6 +214,7 @@
 
         .summary-value.originality {
             color: #0f766e;
+            font-family: Arial, Helvetica, sans-serif;
             font-weight: 400;
             margin: 0;
             padding: 0;
@@ -216,6 +222,7 @@
 
         .summary-label {
             font-size: 10px;
+            font-family: Arial, Helvetica, sans-serif;
             text-transform: uppercase;
             letter-spacing: 0.8px;
             color: #4b5563;
@@ -232,6 +239,7 @@
 
         .primary-label {
             font-size: 10px;
+            font-family: Arial, Helvetica, sans-serif;
             text-transform: uppercase;
             letter-spacing: 0.8px;
             color: #4b5563;
@@ -245,11 +253,13 @@
 
         .source-list {
             width: 100%;
+            font-family: Arial, Helvetica, sans-serif;
             border-collapse: collapse;
         }
 
         .source-row {
             border-bottom: 1px solid #e5e7eb;
+            page-break-inside: avoid;
         }
 
         .source-row:last-child {
@@ -273,9 +283,10 @@
             color: #ffffff;
             font-weight: 700;
             font-size: 15px;
+            line-height: 32px;
             border-radius: 2px;
             padding: 0;
-            margin: 0 auto;
+            margin: 6px auto 0;
         }
 
         .source-info-cell {
@@ -286,19 +297,22 @@
 
         .source-title {
             font-size: 15px;
+            font-family: Arial, Helvetica, sans-serif;
             font-weight: 400;
             color: #111827;
             line-height: 1.45;
             word-break: break-word;
             text-align: left;
-        display: -webkit-box;
-        -webkit-line-clamp: 4;
-        -webkit-box-orient: vertical;
-        overflow: hidden;
-        text-overflow: ellipsis;
+            display: -webkit-box;
+            -webkit-line-clamp: 4;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
 
         .source-meta {
             font-size: 10px;
+            font-family: Arial, Helvetica, sans-serif;
             color: #6b7280;
             margin-top: 4px;
             font-weight: 400;
@@ -316,12 +330,14 @@
 
         .source-words {
             font-size: 14px;
+            font-family: Arial, Helvetica, sans-serif;
             color: #374151;
             font-weight: 400;
         }
 
         .source-sep {
             font-size: 14px;
+            font-family: Arial, Helvetica, sans-serif;
             color: #9ca3af;
             margin: 0 4px;
             font-weight: 400;
@@ -329,6 +345,7 @@
 
         .source-percent {
             font-size: 24px;
+            font-family: Arial, Helvetica, sans-serif;
             font-weight: 400;
             color: #111827;
         }
@@ -484,7 +501,7 @@
         </div>
 
         {{-- PRIMARY SOURCES --}}
-        <div style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.8px; color: #374151; opacity: 1; font-weight: 700; margin: 0 0 8px; border-bottom: 1px solid #111827; padding-bottom: 6px;">PRIMARY SOURCES</div>
+        <div class="primary-label" style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.8px; color: #374151; opacity: 1; font-weight: 700; margin: 0 0 8px; border-bottom: 1px solid #111827; padding-bottom: 6px;">PRIMARY SOURCES</div>
         @php
             $visibleSources = $check->sources->filter(fn($s) => $s->matched_words < 1000 && $s->matched_words > 0);
         @endphp
@@ -494,17 +511,15 @@
         @else
             @php
                 $turnitinPalette = [
-                    '#EF4444',
-                    '#3B82F6',
-                    '#10B981',
-                    '#F59E0B',
-                    '#8B5CF6',
-                    '#14B8A6',
-                    '#EC4899',
-                    '#F97316',
-                    '#6366F1',
-                    '#06B6D4',
-                    '#64748B',
+                    '#DE60E5', // Pink
+                    '#D763FF', // Ungu
+                    '#25B3B3', // Cyan
+                    '#0A9D02', // Hijau
+                    '#A47108', // Olive
+                    '#7A2F08', // Cokelat
+                    '#0A476F', // Biru tua
+                    '#9C449B', // Magenta tua
+                    '#808080', // Abu-abu
                 ];
                 $truncatePdfTitle = function (?string $value, int $maxChars = 170): string {
                     $text = trim((string) ($value ?? ''));
@@ -543,7 +558,7 @@
                                 }
                             }
                             $sourceLabel = $source->source_label ?? $source->source_name ?? 'Internet';
-                            $rowColor = $source->color_code ?? $turnitinPalette[$idx % count($turnitinPalette)];
+                            $rowColor = $turnitinPalette[$idx % count($turnitinPalette)];
                             $displayTitle = $truncatePdfTitle($displayTitle, 170);
                         @endphp
                         <tr class="source-row">

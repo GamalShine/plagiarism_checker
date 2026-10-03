@@ -260,7 +260,8 @@ class PlagiarismController extends Controller
             $index++;
         }
 
-        $highlightedText = $this->buildHighlightedText($check, $sourceIndexMap);
+        $isDocx = strtolower(pathinfo($check->document->file_path ?? $check->document->original_filename, PATHINFO_EXTENSION)) === 'docx';
+        $highlightedText = $isDocx ? '' : $this->buildHighlightedText($check, $sourceIndexMap);
 
         $this->historyService->log(
             auth()->user(),
@@ -319,7 +320,11 @@ class PlagiarismController extends Controller
 
     public function buildHighlightedText(PlagiarismCheck $check, array $sourceIndexMap = []): string
     {
-        $content = $check->document->content ?? '';
+        $content = str_replace(["\r\n", "\r"], "\n", (string) ($check->document->content ?? ''));
+        if (trim($content) === '') {
+            return '';
+        }
+
         $highlights = $check->highlights->filter(fn($h) => mb_strlen(trim($h->original_text)) >= 10);
 
         $positionHighlights = $highlights->filter(fn($h) => ($h->end_position ?? 0) > ($h->start_position ?? 0));
@@ -327,53 +332,27 @@ class PlagiarismController extends Controller
         if ($positionHighlights->isNotEmpty()) {
             $text = $this->buildPositionHighlights($content, $positionHighlights, $sourceIndexMap);
         } else {
-            $text = htmlspecialchars($content);
+            $text = htmlspecialchars($content, ENT_QUOTES, 'UTF-8');
             $sorted = $highlights->sortByDesc(fn($h) => mb_strlen($h->original_text));
 
             foreach ($sorted as $highlight) {
                 $rawOriginal = $highlight->original_text;
-                $needle = htmlspecialchars($rawOriginal);
+                $needle = htmlspecialchars($rawOriginal, ENT_QUOTES, 'UTF-8');
                 if ($needle === '') continue;
 
                 $sourceId = $highlight->plagiarism_source_id;
                 $tIndex = $sourceIndexMap[$sourceId] ?? '*';
-                $color = 'transparent';
+                $color = $this->highlightColor($highlight, $tIndex);
 
-                $badge = "<sup class=\"t-badge\" style=\"background-color: {$color};\" title=\"" . htmlspecialchars($highlight->source->source_label ?? '') . " ({$highlight->match_percentage}%)\">{$tIndex}</sup>";
+                $label = htmlspecialchars((string) ($highlight->source->source_label ?? ''), ENT_QUOTES, 'UTF-8');
+                $badge = "<sup class=\"t-badge\" style=\"background-color: {$color};\" title=\"{$label} ({$highlight->match_percentage}%)\">{$tIndex}</sup>";
                 $replacement = "<mark class=\"t-highlight\" data-source-id=\"{$sourceId}\" data-source-index=\"{$tIndex}\" data-source-color=\"{$color}\" style=\"background-color: {$color}33; border-bottom: 2px solid {$color};\">{$badge}{$needle}</mark>";
 
                 $text = str_replace($needle, $replacement, $text);
             }
         }
 
-        // Pertahankan struktur paragraf dan indentasi naskah dokumen asli
-        $paragraphs = preg_split('/\r\n\r\n|\n\n|\r\r/', $text);
-        if (count($paragraphs) > 1) {
-            $formattedParagraphs = [];
-            foreach ($paragraphs as $p) {
-                $pTrim = trim($p);
-                if ($pTrim === '') continue;
-                $formattedParagraphs[] = '<p>' . nl2br($pTrim) . '</p>';
-            }
-            $text = implode("\n", $formattedParagraphs);
-        } else {
-            $text = nl2br($text);
-        }
-
-        // Auto-format headings & next page break (BAB / Pemisah Halaman)
-        $text = preg_replace(
-            '/^(<mark[^>]*>)?(BAB\s+[IVXLCDM0-9]+.*?)(<\/mark>)?(\s|<br\s*\/?>)*$/mi',
-            '<div class="doc-page-break"></div><div style="text-align: center; font-weight: bold; margin-top: 2rem; margin-bottom: 1.5rem; font-size: 18px; text-transform: uppercase;">$1$2$3</div>',
-            $text
-        );
-
-        $text = preg_replace(
-            '/^(<mark[^>]*>)?(ABSTRAK|KATA PENGANTAR|DAFTAR ISI|DAFTAR PUSTAKA|LAMPIRAN)(<\/mark>)?(\s|<br\s*\/?>)*$/mi',
-            '<div class="doc-page-break"></div><div style="text-align: center; font-weight: bold; margin-top: 2rem; margin-bottom: 1.5rem; font-size: 18px; text-transform: uppercase;">$1$2$3</div>',
-            $text
-        );
-
-        return $text;
+        return $this->formatHighlightedDocument($text);
     }
 
     private function buildPositionHighlights(string $content, $highlights, array $sourceIndexMap): string
@@ -401,7 +380,7 @@ class PlagiarismController extends Controller
                 'type' => 'mark',
                 'content' => mb_substr($content, $start, $end - $start),
                 'source_id' => $highlight->plagiarism_source_id,
-                'color' => 'transparent',
+                'color' => $highlight->source?->color_code ?? '#FDE68A',
                 'label' => $highlight->source->source_label ?? '',
                 'percentage' => $highlight->match_percentage,
             ];
@@ -421,17 +400,82 @@ class PlagiarismController extends Controller
 
         foreach ($segments as $segment) {
             if ($segment['type'] === 'text') {
-                $html .= htmlspecialchars($segment['content']);
+                $html .= htmlspecialchars($segment['content'], ENT_QUOTES, 'UTF-8');
                 continue;
             }
 
             $tIndex = $sourceIndexMap[$segment['source_id']] ?? '*';
-            $color = 'transparent';
-            $badge = "<sup class=\"t-badge\" style=\"background-color: {$color};\" title=\"" . htmlspecialchars($segment['label']) . " ({$segment['percentage']}%)\">{$tIndex}</sup>";
-            $html .= "<mark class=\"t-highlight\" data-source-id=\"{$segment['source_id']}\" data-source-index=\"{$tIndex}\" data-source-color=\"{$color}\" style=\"background-color: {$color}66;\">{$badge}" . htmlspecialchars($segment['content']) . '</mark>';
+            $color = $segment['color'];
+            $label = htmlspecialchars($segment['label'], ENT_QUOTES, 'UTF-8');
+            $badge = "<sup class=\"t-badge\" style=\"background-color: {$color};\" title=\"{$label} ({$segment['percentage']}%)\">{$tIndex}</sup>";
+            $html .= "<mark class=\"t-highlight\" data-source-id=\"{$segment['source_id']}\" data-source-index=\"{$tIndex}\" data-source-color=\"{$color}\" style=\"background-color: {$color}33; border-bottom: 2px solid {$color};\">{$badge}" . htmlspecialchars($segment['content'], ENT_QUOTES, 'UTF-8') . '</mark>';
         }
 
-        return nl2br($html);
+        return $html;
+    }
+
+    private function formatHighlightedDocument(string $html): string
+    {
+        $lines = explode("\n", $html);
+        $blocks = [];
+        $paragraph = [];
+
+        $flushParagraph = function () use (&$blocks, &$paragraph): void {
+            if ($paragraph === []) {
+                return;
+            }
+
+            $content = trim(implode('<br>', $paragraph));
+            if ($content !== '') {
+                $blocks[] = '<p class="doc-paragraph">' . $content . '</p>';
+            }
+            $paragraph = [];
+        };
+
+        foreach ($lines as $line) {
+            $trimmed = trim(strip_tags($line));
+            if ($trimmed === '') {
+                $flushParagraph();
+                continue;
+            }
+
+            if (preg_match('/^(BAB\s+[IVXLCDM0-9]+\b.*|ABSTRAK|KATA PENGANTAR|DAFTAR ISI|DAFTAR PUSTAKA|LAMPIRAN)$/iu', $trimmed)) {
+                $flushParagraph();
+                $blocks[] = '<div class="doc-heading doc-heading-1">' . $line . '</div>';
+                continue;
+            }
+
+            if (preg_match('/^[A-Z]\.(?:\s+|$)/u', $trimmed)) {
+                $flushParagraph();
+                $blocks[] = '<div class="doc-heading doc-heading-2">' . $line . '</div>';
+                continue;
+            }
+
+            if (preg_match('/^(?:\d+\.|\d+(?:\.\d+)+)(?:\s+|$)/u', $trimmed)) {
+                $flushParagraph();
+                $blocks[] = '<div class="doc-heading doc-heading-3">' . $line . '</div>';
+                continue;
+            }
+
+            $paragraph[] = $line;
+        }
+
+        $flushParagraph();
+
+        return implode("\n", $blocks);
+    }
+
+    private function highlightColor($highlight, $sourceIndex): string
+    {
+        $color = (string) ($highlight->color_code ?? $highlight->source?->color_code ?? '');
+        if (preg_match('/^#[0-9a-fA-F]{6}$/', $color)) {
+            return $color;
+        }
+
+        $palette = ['#FCA5A5', '#93C5FD', '#86EFAC', '#FCD34D', '#C4B5FD', '#5EEAD4', '#F9A8D4', '#FDBA74'];
+        $index = is_numeric($sourceIndex) ? max(1, (int) $sourceIndex) - 1 : 0;
+
+        return $palette[$index % count($palette)];
     }
 
     private function routePrefix(): string

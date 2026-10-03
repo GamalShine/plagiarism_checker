@@ -23,5 +23,5 @@ return [
     | Harga per cek plagiasi (IDR)
     |--------------------------------------------------------------------------
     */
-    'check_price'    => env('DOKU_CHECK_PRICE', 10000),
+    'check_price'    => env('DOKU_CHECK_PRICE', 8000),
 ];

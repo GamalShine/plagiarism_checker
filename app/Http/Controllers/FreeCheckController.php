@@ -249,7 +249,8 @@ class FreeCheckController extends Controller
             $sourceIndexMap[$source->id] = $index + 1;
         }
 
-        $highlightedText = function_exists('shell_exec')
+        $isDocx = strtolower(pathinfo($check->document->file_path ?? $check->document->original_filename, PATHINFO_EXTENSION)) === 'docx';
+        $highlightedText = ! $isDocx && function_exists('shell_exec')
             ? app(\App\Http\Controllers\PlagiarismController::class)->buildHighlightedText($check, $sourceIndexMap)
             : '';
 
