@@ -1,7 +1,3 @@
-@php
-    $hangulFontPath = str_replace('\\', '/', storage_path('app/fonts/malgun.ttf'));
-    $hangulFontAvailable = is_file(storage_path('app/fonts/malgun.ttf'));
-@endphp
 <!DOCTYPE html>
 <html>
 
@@ -52,13 +48,15 @@
         }
 
         .metadata-line {
-            font-family: 'Malgun Gothic', Arial, Helvetica, sans-serif;
+            font-family: 'Noto Sans KR', Arial, Helvetica, sans-serif;
             font-size: 8px;
         }
 
         @font-face {
-            font-family: 'Malgun Gothic';
-            src: url('{{ $hangulFontPath }}') format('truetype');
+            font-family: 'Noto Sans KR';
+            font-style: normal;
+            font-weight: 400;
+            src: url('{{ str_replace('\\', '/', resource_path('fonts/NotoSansKR[wght].ttf')) }}') format('truetype');
         }
 
         .file-icon {
@@ -154,13 +152,7 @@
     <div class="cover-page">
         <h1 class="report-title">Cek Turnitin</h1>
         <div class="document-title">{{ $check->document->title ?: $check->document->original_filename }}</div>
-        <div class="muted metadata-line">
-            @if ($hangulFontAvailable)
-                논문 및 과제 검사 - 유사도 검사 시 DB 미 저장 (Originality Check - No Repository)
-            @else
-                Originality Check - No Repository
-            @endif
-        </div>
+        <div class="muted metadata-line">논문 및 과제 검사 - 유사도 검사 시 DB 미 저장 (Originality Check - No Repository)</div>
 
         <div class="divider"></div>
         <div class="similarity">{{ (int) round($check->total_similarity) }}% Overall Similarity</div>

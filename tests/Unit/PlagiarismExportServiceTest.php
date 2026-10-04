@@ -155,6 +155,32 @@ HTML;
         $check = new PlagiarismCheck();
         $check->id = 42;
 
-        $this->assertSame('exports/v2/plagiarism_42.pdf', $service->getExportDiskPath($check));
+        $this->assertSame('exports/v4/plagiarism_42.pdf', $service->getExportDiskPath($check));
+    }
+
+    public function test_bundled_korean_font_renders_the_cover_metadata_without_replacement_glyphs(): void
+    {
+        $projectRoot = dirname(__DIR__, 2);
+        $fontPath = str_replace('\\', '/', $projectRoot . '/resources/fonts/NotoSansKR[wght].ttf');
+        $phrase = '논문 및 과제 검사 - 유사도 검사 시 DB 미 저장';
+        $outputPath = tempnam(sys_get_temp_dir(), 'korean_cover_');
+        $this->assertNotFalse($outputPath);
+
+        try {
+            $dompdf = new \Dompdf\Dompdf(['chroot' => $projectRoot]);
+            $dompdf->loadHtml('<!doctype html><meta charset="utf-8"><style>@font-face{font-family:NotoSansKR;src:url("'
+                . $fontPath
+                . '") format("truetype");}.metadata{font-family:NotoSansKR;font-size:12px;}</style><p class="metadata">'
+                . htmlspecialchars($phrase, ENT_QUOTES, 'UTF-8')
+                . '</p>');
+            $dompdf->render();
+            file_put_contents($outputPath, $dompdf->output());
+
+            $renderedText = (new Parser())->parseFile($outputPath)->getText();
+            $this->assertStringContainsString($phrase, $renderedText);
+            $this->assertStringNotContainsString('?', $renderedText);
+        } finally {
+            @unlink($outputPath);
+        }
     }
 }
