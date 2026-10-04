@@ -209,7 +209,11 @@ class PlagiarismExportService
         bool $includeAllSources = false,
     ): Response {
         $check->loadMissing(['document', 'sources', 'highlights.source']);
-        $highlightedText = $this->buildLightweightHighlightedText($check);
+        $sourceIndexMap = [];
+        foreach ($check->sources as $index => $source) {
+            $sourceIndexMap[$source->id] = (int) ($source->turnitin_index ?? ($index + 1));
+        }
+        $highlightedText = $this->buildFallbackHighlightedText($check, $sourceIndexMap);
 
         return Pdf::loadView('plagiarism.export_report', [
             'check' => $check,
@@ -264,19 +268,33 @@ class PlagiarismExportService
         string $downloadName,
         bool $includeAllSources = false,
     ): Response {
-        $filePath = $check->document->file_path
-            ? Storage::disk('public')->path($check->document->file_path)
-            : '';
-        $isSourcePdf = strtolower(pathinfo($filePath, PATHINFO_EXTENSION)) === 'pdf'
-            && is_file($filePath);
+        $storedPath = (string) ($check->document->file_path ?? '');
+        $filePath = $storedPath !== '' ? Storage::disk('public')->path($storedPath) : '';
+        $extension = strtolower(pathinfo($storedPath ?: (string) $check->document->original_filename, PATHINFO_EXTENSION));
+        $isSourcePdf = ($extension === 'pdf' || strtolower((string) $check->document->mime_type) === 'application/pdf')
+            && is_file($filePath)
+            && filesize($filePath) > 0;
         $sourcePdfPath = $isSourcePdf ? $filePath : null;
+
+        if ($sourcePdfPath === null) {
+            Log::warning('PDF export source file is unavailable; exporting extracted text if present', [
+                'check_id' => $check->id,
+                'document_id' => $check->document->id,
+                'stored_path' => $storedPath,
+                'resolved_path' => $filePath,
+                'exists' => $filePath !== '' && is_file($filePath),
+                'mime_type' => $check->document->mime_type,
+                'content_length' => mb_strlen((string) $check->document->content),
+                'highlights_count' => $check->highlights->count(),
+            ]);
+        }
 
         $sourceIndexMap = [];
         foreach ($check->sources as $index => $source) {
             $sourceIndexMap[$source->id] = (int) ($source->turnitin_index ?? ($index + 1));
         }
 
-        if (strtolower(pathinfo($filePath, PATHINFO_EXTENSION)) === 'docx') {
+        if ($extension === 'docx') {
             $documentHtml = $this->documentPageRenderer->renderDocxHtml($filePath, $check->document->id);
             if ($documentHtml !== null) {
                 $highlightedText = $this->highlightDocumentHtml(
@@ -285,6 +303,10 @@ class PlagiarismExportService
                     $sourceIndexMap,
                 );
             }
+        }
+
+        if (trim($highlightedText) === '') {
+            $highlightedText = $this->buildFallbackHighlightedText($check, $sourceIndexMap);
         }
 
         $highlightedText = $this->justifyTwelvePointParagraphs($highlightedText);
@@ -313,6 +335,9 @@ class PlagiarismExportService
         $reportPath = $tempDir . DIRECTORY_SEPARATOR . 'report.pdf';
         $mergedPath = $tempDir . DIRECTORY_SEPARATOR . 'merged.pdf';
 
+        $sourceImportFailed = false;
+        $sourcePagesMerged = false;
+        $appliedSourceHighlights = null;
         try {
             $this->ensureArialFont();
             $this->renderPartialPdf('plagiarism.export_cover', compact('check'), $coverPath);
@@ -337,20 +362,47 @@ class PlagiarismExportService
             ], $reportPath);
             $pdfParts[] = $reportPath;
 
-            if ($this->mergePdfFiles(
+            $mergeSucceeded = $this->mergePdfFiles(
                 $mergedPath,
                 $pdfParts,
                 $sourcePdfPath,
                 $sourcePdfPath !== null ? $check->highlights->all() : [],
                 $sourceIndexMap,
-            )) {
-                return response()->download($mergedPath, $downloadName, [
-                    'Content-Type' => 'application/pdf',
-                ])->deleteFileAfterSend(true);
+                $appliedSourceHighlights,
+            );
+
+            if ($mergeSucceeded) {
+                $sourcePagesMerged = $sourcePdfPath !== null;
+                if ($sourcePdfPath !== null
+                    && $check->highlights->isNotEmpty()
+                    && ($appliedSourceHighlights ?? 0) < $check->highlights->count()) {
+                    $sourceImportFailed = true;
+                    Log::warning('Not all source PDF highlights matched; switching to highlighted text fallback', [
+                        'check_id' => $check->id,
+                        'source_pdf' => $sourcePdfPath,
+                        'applied_highlights' => $appliedSourceHighlights,
+                        'highlights_count' => $check->highlights->count(),
+                    ]);
+                    @unlink($mergedPath);
+                } else {
+                    return response()->download($mergedPath, $downloadName, [
+                        'Content-Type' => 'application/pdf',
+                    ])->deleteFileAfterSend(true);
+                }
+            } elseif ($sourcePdfPath !== null) {
+                $sourceImportFailed = true;
+                Log::warning('FPDI returned no merged PDF; switching to highlighted text fallback', [
+                    'check_id' => $check->id,
+                    'source_pdf' => $sourcePdfPath,
+                    'parts' => count($pdfParts),
+                ]);
             }
         } catch (\Throwable $e) {
+            $sourceImportFailed = $sourcePdfPath !== null;
             Log::warning('No-Python PDF export failed', [
                 'check_id' => $check->id,
+                'source_pdf' => $sourcePdfPath,
+                'source_import_failed' => $sourceImportFailed,
                 'error' => $e->getMessage(),
             ]);
         } finally {
@@ -359,7 +411,126 @@ class PlagiarismExportService
             @unlink($reportPath);
         }
 
-        return $this->renderSummaryPdf($check, $downloadName, $includeAllSources);
+        if ($sourceImportFailed || $sourcePdfPath === null) {
+            $fallbackDir = storage_path('app/temp/exports/php-fallback_' . $check->id . '_' . time());
+            File::ensureDirectoryExists($fallbackDir);
+            $fallbackCoverPath = $fallbackDir . DIRECTORY_SEPARATOR . 'cover.pdf';
+            $fallbackDocumentPath = $fallbackDir . DIRECTORY_SEPARATOR . 'document.pdf';
+            $fallbackReportPath = $fallbackDir . DIRECTORY_SEPARATOR . 'report.pdf';
+            $fallbackMergedPath = $fallbackDir . DIRECTORY_SEPARATOR . 'merged.pdf';
+
+            try {
+                $this->renderPartialPdf('plagiarism.export_cover', compact('check'), $fallbackCoverPath);
+                $fallbackParts = [$fallbackCoverPath];
+                if ($sourcePagesMerged && $sourcePdfPath !== null) {
+                    // Retain successfully imported original pages when falling
+                    // back only because their text could not be highlighted.
+                    $fallbackParts[] = $sourcePdfPath;
+                }
+                if (trim($highlightedText) !== '') {
+                    $this->renderPartialPdf('plagiarism.export_document', [
+                        'documentHtml' => $highlightedText,
+                        'documentStyles' => $documentStyles,
+                    ], $fallbackDocumentPath);
+                    $fallbackParts[] = $fallbackDocumentPath;
+                }
+                $this->renderPartialPdf('plagiarism.export_report', [
+                    'check' => $check,
+                    'highlightedText' => '',
+                    'includeAllSources' => $includeAllSources,
+                ], $fallbackReportPath);
+                $fallbackParts[] = $fallbackReportPath;
+
+                if ($this->mergePdfFiles($fallbackMergedPath, $fallbackParts)) {
+                    return response()->download($fallbackMergedPath, $downloadName, [
+                        'Content-Type' => 'application/pdf',
+                    ])->deleteFileAfterSend(true);
+                }
+            } catch (\Throwable $e) {
+                Log::error('PHP text-document export fallback failed', [
+                    'check_id' => $check->id,
+                    'content_length' => mb_strlen((string) $check->document->content),
+                    'highlights_count' => $check->highlights->count(),
+                    'error' => $e->getMessage(),
+                ]);
+            } finally {
+                @unlink($fallbackCoverPath);
+                @unlink($fallbackDocumentPath);
+                @unlink($fallbackReportPath);
+            }
+        }
+
+        Log::error('PDF export could not include document pages or extracted text', [
+            'check_id' => $check->id,
+            'document_id' => $check->document->id,
+            'stored_path' => $storedPath,
+            'resolved_path' => $filePath,
+            'content_length' => mb_strlen((string) $check->document->content),
+            'highlights_count' => $check->highlights->count(),
+        ]);
+
+        if (trim((string) $check->document->content) === '' && ! $sourcePagesMerged) {
+            abort(422, 'Dokumen asli tidak dapat dimasukkan ke PDF dan teks dokumen tidak tersedia untuk fallback. Periksa file sumber dan storage hosting.');
+        }
+
+        abort(500, 'Export PDF gagal digabungkan. Periksa log Laravel untuk detail proses export.');
+    }
+
+    private function buildFallbackHighlightedText(PlagiarismCheck $check, array $sourceIndexMap): string
+    {
+        $content = str_replace(["\r\n", "\r"], "\n", (string) ($check->document->content ?? ''));
+        if (trim($content) === '') {
+            return '';
+        }
+
+        $highlights = [];
+        foreach ($check->highlights as $highlight) {
+            $needle = trim((string) $highlight->original_text);
+            if (mb_strlen($needle) < 4) {
+                continue;
+            }
+
+            $start = (int) $highlight->start_position;
+            $end = (int) $highlight->end_position;
+            if ($end <= $start || mb_substr($content, $start, $end - $start) !== $needle) {
+                $foundAt = mb_stripos($content, $needle);
+                if ($foundAt === false) {
+                    continue;
+                }
+                $start = $foundAt;
+                $end = $start + mb_strlen($needle);
+            }
+
+            $highlights[] = [
+                'start' => $start,
+                'end' => $end,
+                'source_id' => $highlight->plagiarism_source_id,
+                'color' => (string) ($highlight->color_code ?? $highlight->source?->color_code ?? '#FDE68A'),
+                'text' => $needle,
+            ];
+        }
+
+        usort($highlights, fn (array $left, array $right): int => $left['start'] <=> $right['start'] ?: $right['end'] <=> $left['end']);
+        $html = '';
+        $cursor = 0;
+        foreach ($highlights as $highlight) {
+            if ($highlight['start'] < $cursor) {
+                continue;
+            }
+
+            $html .= htmlspecialchars(mb_substr($content, $cursor, $highlight['start'] - $cursor), ENT_QUOTES, 'UTF-8');
+            $sourceIndex = $sourceIndexMap[$highlight['source_id']] ?? '*';
+            $color = preg_match('/^#[0-9a-f]{6}$/i', $highlight['color']) === 1 ? $highlight['color'] : '#FDE68A';
+            $safeText = htmlspecialchars(mb_substr($content, $highlight['start'], $highlight['end'] - $highlight['start']), ENT_QUOTES, 'UTF-8');
+            $html .= '<mark class="t-highlight" style="background-color: ' . $color . '; border-bottom: 2px solid ' . $color . ';">'
+                . '<sup class="t-badge" style="background-color: ' . $color . ';">' . htmlspecialchars((string) $sourceIndex, ENT_QUOTES, 'UTF-8') . '</sup>'
+                . $safeText . '</mark>';
+            $cursor = $highlight['end'];
+        }
+
+        $html .= htmlspecialchars(mb_substr($content, $cursor), ENT_QUOTES, 'UTF-8');
+
+        return nl2br($html);
     }
 
     private function justifyTwelvePointParagraphs(string $html): string
@@ -776,10 +947,12 @@ class PlagiarismExportService
         ?string $highlightedSourcePath = null,
         array $highlights = [],
         array $sourceIndexMap = [],
+        ?int &$appliedSourceHighlights = null,
     ): bool {
         $pdf = new Fpdi();
         $importedPage = false;
         $sourceTextRuns = [];
+        $appliedSourceHighlights = 0;
 
         if ($highlightedSourcePath !== null
             && $highlights !== []
@@ -817,7 +990,7 @@ class PlagiarismExportService
                 if ($highlightedSourcePath !== null
                     && realpath($pdfPath) === realpath($highlightedSourcePath)
                     && isset($sourceTextRuns[$pageNumber])) {
-                    $this->drawPdfTextHighlights(
+                    $appliedSourceHighlights += $this->drawPdfTextHighlights(
                         $pdf,
                         $sourceTextRuns[$pageNumber],
                         (float) $size['height'],
