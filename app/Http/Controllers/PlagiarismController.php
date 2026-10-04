@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Jobs\GeneratePlagiarismExport;
 use App\Jobs\ProcessPlagiarismCheck;
 use App\Models\Document;
 use App\Models\PlagiarismCheck;
@@ -244,7 +245,7 @@ class PlagiarismController extends Controller
         ]);
     }
 
-    public function export(PlagiarismCheck $plagiarismCheck)
+    public function export(Request $request, PlagiarismCheck $plagiarismCheck)
     {
         Gate::authorize('view', $plagiarismCheck);
 
@@ -260,6 +261,35 @@ class PlagiarismController extends Controller
             $index++;
         }
 
+        $downloadName = 'plagiarism_report_' . $check->id . '.pdf';
+        $exportPath = $this->plagiarismExportService->getExportDiskPath($check);
+
+        if (Storage::disk('public')->exists($exportPath)) {
+            return response()->download(Storage::disk('public')->path($exportPath), $downloadName, [
+                'Content-Type' => 'application/pdf',
+            ]);
+        }
+
+        if ($this->plagiarismExportService->shouldQueueExport()) {
+            GeneratePlagiarismExport::dispatch($check->id, $downloadName, false);
+
+            $this->historyService->log(
+                auth()->user(),
+                'export',
+                "Export hasil cek plagiarisme: \"{$check->document->title}\" (antrian background)"
+            );
+
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'status' => 'queued',
+                    'message' => 'Export PDF sedang diproses di background. Silakan tunggu beberapa saat lalu refresh halaman.',
+                ], 202);
+            }
+
+            return redirect()->route($this->routePrefix() . '.plagiarism.result', $check->id)
+                ->with('status', 'Export PDF sedang diproses di background. Silakan tunggu beberapa saat lalu klik export lagi.');
+        }
+
         $isDocx = strtolower(pathinfo($check->document->file_path ?? $check->document->original_filename, PATHINFO_EXTENSION)) === 'docx';
         $highlightedText = $isDocx ? '' : $this->buildHighlightedText($check, $sourceIndexMap);
 
@@ -272,7 +302,7 @@ class PlagiarismController extends Controller
         return $this->plagiarismExportService->buildExportResponse(
             $check,
             $highlightedText,
-            'plagiarism_report_' . $check->id . '.pdf'
+            $downloadName
         );
     }
 

@@ -16,11 +16,53 @@ class PlagiarismExportService
         private DocumentPageRenderer $documentPageRenderer,
     ) {}
 
+    public function shouldQueueExport(): bool
+    {
+        $explicit = env('PDF_EXPORT_QUEUE');
+        if ($explicit !== null) {
+            return filter_var($explicit, FILTER_VALIDATE_BOOL);
+        }
+
+        return config('queue.default') !== 'sync';
+    }
+
+    public function getExportDiskPath(PlagiarismCheck $check): string
+    {
+        return 'exports/plagiarism_' . $check->id . '.pdf';
+    }
+
+    public function storeGeneratedExport(
+        PlagiarismCheck $check,
+        string $highlightedText,
+        string $downloadName,
+        bool $includeAllSources = false,
+    ): string {
+        $exportPath = $this->getExportDiskPath($check);
+        $response = $this->buildExportResponse(
+            $check,
+            $highlightedText,
+            $downloadName,
+            $includeAllSources,
+            deleteTemporaryFile: false,
+        );
+
+        $file = method_exists($response, 'getFile') ? $response->getFile() : null;
+        if (! $file instanceof \SplFileInfo || ! $file->isFile()) {
+            throw new \RuntimeException('Queued export response could not resolve a PDF file for check #' . $check->id);
+        }
+
+        $content = file_get_contents($file->getPathname());
+        Storage::disk('public')->put($exportPath, $content !== false ? $content : '');
+
+        return $exportPath;
+    }
+
     public function buildExportResponse(
         PlagiarismCheck $check,
         string $highlightedText,
         string $downloadName,
         bool $includeAllSources = false,
+        bool $deleteTemporaryFile = true,
     ): Response {
         @ini_set('memory_limit', '1024M');
         @set_time_limit(0);
@@ -122,7 +164,7 @@ class PlagiarismExportService
 
             return response()->download($mergedPath, $downloadName, [
                 'Content-Type' => 'application/pdf',
-            ])->deleteFileAfterSend(true);
+            ])->deleteFileAfterSend($deleteTemporaryFile);
         }
 
         Log::warning('PDF merge unavailable, falling back to single PDF export', [
@@ -444,7 +486,7 @@ class PlagiarismExportService
                 if ($this->mergePdfFiles($fallbackMergedPath, $fallbackParts)) {
                     return response()->download($fallbackMergedPath, $downloadName, [
                         'Content-Type' => 'application/pdf',
-                    ])->deleteFileAfterSend(true);
+                    ])->deleteFileAfterSend($deleteTemporaryFile);
                 }
             } catch (\Throwable $e) {
                 Log::error('PHP text-document export fallback failed', [

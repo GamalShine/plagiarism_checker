@@ -233,7 +233,7 @@ class FreeCheckController extends Controller
         ]);
     }
 
-    public function export(PlagiarismCheck $plagiarismCheck)
+    public function export(Request $request, PlagiarismCheck $plagiarismCheck)
     {
         abort_unless($plagiarismCheck->status === 'completed', 404);
 
@@ -249,6 +249,28 @@ class FreeCheckController extends Controller
             $sourceIndexMap[$source->id] = $index + 1;
         }
 
+        $downloadName = 'plagiarism_report_guest_' . $check->id . '.pdf';
+        $exportPath = $this->plagiarismExportService->getExportDiskPath($check);
+        if (Storage::disk('public')->exists($exportPath)) {
+            return response()->download(Storage::disk('public')->path($exportPath), $downloadName, [
+                'Content-Type' => 'application/pdf',
+            ]);
+        }
+
+        if ($this->plagiarismExportService->shouldQueueExport()) {
+            \App\Jobs\GeneratePlagiarismExport::dispatch($check->id, $downloadName, true);
+
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'status' => 'queued',
+                    'message' => 'Export PDF sedang diproses di background. Silakan tunggu beberapa saat lalu coba lagi.',
+                ], 202);
+            }
+
+            return redirect()->route('free.check.result', $check->id)
+                ->with('status', 'Export PDF sedang diproses di background. Silakan tunggu beberapa saat lalu klik export lagi.');
+        }
+
         $isDocx = strtolower(pathinfo($check->document->file_path ?? $check->document->original_filename, PATHINFO_EXTENSION)) === 'docx';
         $highlightedText = ! $isDocx
             ? app(\App\Http\Controllers\PlagiarismController::class)->buildHighlightedText($check, $sourceIndexMap)
@@ -257,7 +279,7 @@ class FreeCheckController extends Controller
         return $this->plagiarismExportService->buildExportResponse(
             $check,
             $highlightedText,
-            'plagiarism_report_guest_' . $check->id . '.pdf',
+            $downloadName,
             true,
         );
     }

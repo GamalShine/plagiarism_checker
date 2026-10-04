@@ -2,8 +2,11 @@
 
 namespace Tests\Feature\Plagiarism;
 
+use App\Jobs\GeneratePlagiarismExport;
 use App\Jobs\ProcessPlagiarismCheck;
+use App\Models\Document;
 use App\Models\Payment;
+use App\Models\PlagiarismCheck;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Queue;
@@ -59,6 +62,56 @@ class PlagiarismQueueProcessingTest extends TestCase
 
         $this->assertSame(42, $job->checkId);
         $this->assertSame(['1', '3'], $job->chapters);
+    }
+
+    public function test_export_requests_dispatch_a_background_pdf_generation_job(): void
+    {
+        config(['queue.default' => 'database']);
+        putenv('PDF_EXPORT_QUEUE=1');
+        $_ENV['PDF_EXPORT_QUEUE'] = '1';
+
+        Queue::fake();
+        Storage::fake('public');
+
+        $user = User::factory()->create([
+            'role' => 'admin',
+            'email_verified_at' => now(),
+        ]);
+
+        $document = Document::create([
+            'user_id' => $user->id,
+            'title' => 'Dokumen uji export',
+            'file_path' => 'documents/test-export.pdf',
+            'original_filename' => 'test-export.pdf',
+            'type' => 'plagiarism',
+            'status' => 'completed',
+            'content' => 'Teks dokumen contoh untuk export PDF.',
+            'file_size' => 1024,
+            'mime_type' => 'application/pdf',
+        ]);
+
+        $check = PlagiarismCheck::create([
+            'document_id' => $document->id,
+            'user_id' => $user->id,
+            'status' => 'completed',
+            'total_similarity' => 12,
+            'sources_checked' => ['web'],
+        ]);
+
+        $this->withoutMiddleware([
+            \Illuminate\Auth\Middleware\EnsureEmailIsVerified::class,
+            \App\Http\Middleware\EnsurePackagePaymentCompleted::class,
+        ]);
+
+        $response = $this->actingAs($user)->get(route('user.plagiarism.export', $check));
+
+        $response->assertRedirect();
+        Queue::assertPushed(GeneratePlagiarismExport::class, function (GeneratePlagiarismExport $job) use ($check) {
+            return $job->checkId === $check->id;
+        });
+
+        putenv('PDF_EXPORT_QUEUE');
+        unset($_ENV['PDF_EXPORT_QUEUE']);
     }
 
     public function test_plagiarism_job_timeout_matches_five_minute_target(): void

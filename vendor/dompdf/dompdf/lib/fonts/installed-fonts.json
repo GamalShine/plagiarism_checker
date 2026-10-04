@@ -1,5 +1,6 @@
 {
-    "malgun gothic": {
-        "normal": "malgun_gothic_normal_2845ff3f4e67c03931f1a414946d5d75"
+    "arial": {
+        "normal": "C:\\laragon\\www\\plagiarism_checker\\vendor\\dompdf\\dompdf\/lib\/fonts\/arial_normal_0dc8c92d22c6332c67319e7388b4df41",
+        "bold": "arial_bold_0de9742242b779c75069adfa4fd7d0af"
     }
 }

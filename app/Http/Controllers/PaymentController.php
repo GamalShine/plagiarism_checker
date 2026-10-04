@@ -374,7 +374,7 @@ class PaymentController extends Controller
         ]);
     }
 
-    public function guestExport(string $token)
+    public function guestExport(Request $request, string $token)
     {
         $payment = Payment::where('guest_token', $token)->firstOrFail();
         $check = $payment->plagiarismCheck()
@@ -389,6 +389,28 @@ class PaymentController extends Controller
             $sourceIndexMap[$source->id] = $index + 1;
         }
 
+        $downloadName = 'plagiarism_report_guest_' . $check->id . '.pdf';
+        $exportPath = $this->plagiarismExportService->getExportDiskPath($check);
+        if (Storage::disk('public')->exists($exportPath)) {
+            return response()->download(Storage::disk('public')->path($exportPath), $downloadName, [
+                'Content-Type' => 'application/pdf',
+            ]);
+        }
+
+        if ($this->plagiarismExportService->shouldQueueExport()) {
+            \App\Jobs\GeneratePlagiarismExport::dispatch($check->id, $downloadName, true);
+
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'status' => 'queued',
+                    'message' => 'Export PDF sedang diproses di background. Silakan tunggu beberapa saat lalu coba lagi.',
+                ], 202);
+            }
+
+            return redirect()->route('guest.payment.result', $token)
+                ->with('status', 'Export PDF sedang diproses di background. Silakan tunggu beberapa saat lalu klik export lagi.');
+        }
+
         $isDocx = strtolower(pathinfo($check->document->file_path ?? $check->document->original_filename, PATHINFO_EXTENSION)) === 'docx';
         $highlightedText = ! $isDocx
             ? app(PlagiarismController::class)->buildHighlightedText($check, $sourceIndexMap)
@@ -397,7 +419,7 @@ class PaymentController extends Controller
         return $this->plagiarismExportService->buildExportResponse(
             $check,
             $highlightedText,
-            'plagiarism_report_guest_' . $check->id . '.pdf',
+            $downloadName,
         );
     }
 
