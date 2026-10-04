@@ -406,7 +406,15 @@ class PlagiarismExportService
         $sourcePagesMerged = false;
         $appliedSourceHighlights = null;
         try {
+            $this->ensureHangulFont();
             $this->ensureArialFont();
+
+            if (! is_file(storage_path('app/fonts/malgun.ttf'))) {
+                Log::warning('Hangul font is unavailable for the PDF cover; the cover template will use its English fallback.', [
+                    'check_id' => $check->id,
+                ]);
+            }
+
             $this->renderPartialPdf('plagiarism.export_cover', compact('check'), $coverPath);
             $pdfParts = [$coverPath];
 
