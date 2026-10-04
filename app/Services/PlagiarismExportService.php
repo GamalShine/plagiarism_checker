@@ -12,6 +12,8 @@ use Symfony\Component\HttpFoundation\Response;
 
 class PlagiarismExportService
 {
+    private const EXPORT_CACHE_VERSION = 'v2';
+
     public function __construct(
         private DocumentPageRenderer $documentPageRenderer,
     ) {}
@@ -28,7 +30,7 @@ class PlagiarismExportService
 
     public function getExportDiskPath(PlagiarismCheck $check): string
     {
-        return 'exports/plagiarism_' . $check->id . '.pdf';
+        return 'exports/' . self::EXPORT_CACHE_VERSION . '/plagiarism_' . $check->id . '.pdf';
     }
 
     public function storeGeneratedExport(

@@ -148,4 +148,13 @@ HTML;
 
         @unlink($sourcePdfPath);
     }
+
+    public function test_export_cache_uses_a_new_versioned_path_after_pdf_template_changes(): void
+    {
+        $service = new PlagiarismExportService(new DocumentPageRenderer());
+        $check = new PlagiarismCheck();
+        $check->id = 42;
+
+        $this->assertSame('exports/v2/plagiarism_42.pdf', $service->getExportDiskPath($check));
+    }
 }
