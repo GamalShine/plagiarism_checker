@@ -172,9 +172,9 @@
                 <div>
                     <h2 class="text-xs font-black uppercase tracking-wider text-slate-900">Hubungi Kami</h2>
                     <ul class="mt-4 space-y-2.5 text-xs text-slate-500">
-                        <li><a href="mailto:support@naskahcek.id" class="hover:text-blue-600">support@naskahcek.id</a></li>
-                        <li><a href="https://wa.me/6281234567890" target="_blank" rel="noopener noreferrer"
-                                class="hover:text-blue-600">+62 812-3456-7890</a></li>
+                        <li><a href="mailto:mynaskah94@gmail.com" class="hover:text-blue-600">mynaskah94@gmail.com</a></li>
+                        <li><a href="https://wa.me/6281295436152" target="_blank" rel="noopener noreferrer"
+                                class="hover:text-blue-600">+62 812-9543-6152</a></li>
                     </ul>
                 </div>
             </div>
@@ -209,9 +209,9 @@
         const subject = `[${category}] Laporan dari ${name}`;
         const body = `Jenis laporan: ${category}\nNama: ${name}\nEmail: ${email}\n\nDetail:\n${message}`;
         const externalUrl = channel === 'email'
-            ? `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent('support@naskahcek.id')}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
+            ? `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent('mynaskah94@gmail.com')}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
             : channel === 'whatsapp'
-                ? `https://wa.me/6281234567890?text=${encodeURIComponent(body)}`
+                ? `https://wa.me/6281295436152?text=${encodeURIComponent(body)}`
                 : null;
         const externalWindow = externalUrl
             ? window.open(externalUrl, '_blank')

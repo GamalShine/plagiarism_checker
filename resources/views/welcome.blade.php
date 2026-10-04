@@ -937,8 +937,8 @@
             <div>
                 <h3 class="text-xs font-black uppercase tracking-wider text-slate-900">Hubungi Kami</h3>
                 <ul class="mt-4 space-y-2.5 text-xs text-slate-500">
-                    <li>support@naskahcek.id</li>
-                    <li>+62 812-3456-7890</li>
+                    <li><a href="mailto:mynaskah94@gmail.com" class="transition hover:text-blue-600">mynaskah94@gmail.com</a></li>
+                    <li><a href="https://wa.me/6281295436152" target="_blank" rel="noopener noreferrer" class="transition hover:text-blue-600">+62 812-9543-6152</a></li>
                 </ul>
                 <div class="mt-4 flex gap-2">
                     <span
