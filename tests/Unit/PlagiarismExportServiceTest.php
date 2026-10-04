@@ -131,4 +131,21 @@ HTML;
         $this->assertStringContainsString('>2</sup>', $html);
         $this->assertStringContainsString('distinctive plagiarism sentence', $html);
     }
+
+    public function test_lightweight_mode_disables_raw_source_pdf_import_for_hosting_exports(): void
+    {
+        $service = new PlagiarismExportService(new DocumentPageRenderer());
+        $method = new ReflectionMethod($service, 'shouldImportSourcePdfForExport');
+        $method->setAccessible(true);
+
+        $sourcePdfPath = tempnam(sys_get_temp_dir(), 'source_pdf_');
+        $this->assertNotFalse($sourcePdfPath);
+
+        file_put_contents($sourcePdfPath, '%PDF-1.4\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%EOF');
+
+        $this->assertFalse($method->invoke($service, $sourcePdfPath, true));
+        $this->assertTrue($method->invoke($service, $sourcePdfPath, false));
+
+        @unlink($sourcePdfPath);
+    }
 }

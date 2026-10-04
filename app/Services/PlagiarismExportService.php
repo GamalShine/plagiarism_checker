@@ -304,6 +304,21 @@ class PlagiarismExportService
         return filter_var(env('PDF_LIGHTWEIGHT', false), FILTER_VALIDATE_BOOL);
     }
 
+    private function shouldImportSourcePdfForExport(?string $sourcePdfPath, ?bool $lightweightMode = null): bool
+    {
+        if (! is_string($sourcePdfPath) || trim($sourcePdfPath) === '') {
+            return false;
+        }
+
+        if (! is_file($sourcePdfPath) || filesize($sourcePdfPath) <= 0) {
+            return false;
+        }
+
+        $effectiveMode = $lightweightMode ?? $this->shouldUseLightweightPdfExport();
+
+        return ! $effectiveMode;
+    }
+
     private function renderNoPythonPdf(
         PlagiarismCheck $check,
         string $highlightedText,
@@ -334,6 +349,16 @@ class PlagiarismExportService
         $sourceIndexMap = [];
         foreach ($check->sources as $index => $source) {
             $sourceIndexMap[$source->id] = (int) ($source->turnitin_index ?? ($index + 1));
+        }
+
+        $importOriginalSourcePdf = $this->shouldImportSourcePdfForExport($sourcePdfPath);
+
+        if (! $importOriginalSourcePdf && $sourcePdfPath !== null) {
+            Log::info('Shared-hosting lightweight export mode enabled; skipping raw-source PDF merge to keep document/highlight layout stable.', [
+                'check_id' => $check->id,
+                'source_pdf' => $sourcePdfPath,
+                'pdf_lightweight' => $this->shouldUseLightweightPdfExport(),
+            ]);
         }
 
         if ($extension === 'docx') {
@@ -385,7 +410,7 @@ class PlagiarismExportService
             $this->renderPartialPdf('plagiarism.export_cover', compact('check'), $coverPath);
             $pdfParts = [$coverPath];
 
-            if ($sourcePdfPath !== null) {
+            if ($importOriginalSourcePdf) {
                 // Keep the uploaded PDF pages and apply PHP-side visual marks
                 // during the FPDI merge instead of reducing the document to text.
                 $pdfParts[] = $sourcePdfPath;
@@ -407,15 +432,15 @@ class PlagiarismExportService
             $mergeSucceeded = $this->mergePdfFiles(
                 $mergedPath,
                 $pdfParts,
-                $sourcePdfPath,
-                $sourcePdfPath !== null ? $check->highlights->all() : [],
+                $importOriginalSourcePdf ? $sourcePdfPath : null,
+                $importOriginalSourcePdf ? $check->highlights->all() : [],
                 $sourceIndexMap,
                 $appliedSourceHighlights,
             );
 
             if ($mergeSucceeded) {
-                $sourcePagesMerged = $sourcePdfPath !== null;
-                if ($sourcePdfPath !== null
+                $sourcePagesMerged = $importOriginalSourcePdf;
+                if ($importOriginalSourcePdf
                     && $check->highlights->isNotEmpty()
                     && ($appliedSourceHighlights ?? 0) < $check->highlights->count()) {
                     $sourceImportFailed = true;
@@ -431,7 +456,7 @@ class PlagiarismExportService
                         'Content-Type' => 'application/pdf',
                     ])->deleteFileAfterSend(true);
                 }
-            } elseif ($sourcePdfPath !== null) {
+            } elseif ($importOriginalSourcePdf) {
                 $sourceImportFailed = true;
                 Log::warning('FPDI returned no merged PDF; switching to highlighted text fallback', [
                     'check_id' => $check->id,
@@ -440,7 +465,7 @@ class PlagiarismExportService
                 ]);
             }
         } catch (\Throwable $e) {
-            $sourceImportFailed = $sourcePdfPath !== null;
+            $sourceImportFailed = $importOriginalSourcePdf;
             Log::warning('No-Python PDF export failed', [
                 'check_id' => $check->id,
                 'source_pdf' => $sourcePdfPath,
@@ -453,7 +478,7 @@ class PlagiarismExportService
             @unlink($reportPath);
         }
 
-        if ($sourceImportFailed || $sourcePdfPath === null) {
+        if ($sourceImportFailed || ! $importOriginalSourcePdf) {
             $fallbackDir = storage_path('app/temp/exports/php-fallback_' . $check->id . '_' . time());
             File::ensureDirectoryExists($fallbackDir);
             $fallbackCoverPath = $fallbackDir . DIRECTORY_SEPARATOR . 'cover.pdf';
@@ -464,7 +489,7 @@ class PlagiarismExportService
             try {
                 $this->renderPartialPdf('plagiarism.export_cover', compact('check'), $fallbackCoverPath);
                 $fallbackParts = [$fallbackCoverPath];
-                if ($sourcePagesMerged && $sourcePdfPath !== null) {
+                if ($sourcePagesMerged && $importOriginalSourcePdf && $sourcePdfPath !== null) {
                     // Retain successfully imported original pages when falling
                     // back only because their text could not be highlighted.
                     $fallbackParts[] = $sourcePdfPath;
