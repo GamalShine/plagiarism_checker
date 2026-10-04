@@ -267,6 +267,9 @@ class PlagiarismExportService
         $filePath = $check->document->file_path
             ? Storage::disk('public')->path($check->document->file_path)
             : '';
+        $isSourcePdf = strtolower(pathinfo($filePath, PATHINFO_EXTENSION)) === 'pdf'
+            && is_file($filePath);
+        $sourcePdfPath = $isSourcePdf ? $filePath : null;
 
         $sourceIndexMap = [];
         foreach ($check->sources as $index => $source) {
@@ -315,7 +318,11 @@ class PlagiarismExportService
             $this->renderPartialPdf('plagiarism.export_cover', compact('check'), $coverPath);
             $pdfParts = [$coverPath];
 
-            if (trim($highlightedText) !== '') {
+            if ($sourcePdfPath !== null) {
+                // Keep the uploaded PDF pages and apply PHP-side visual marks
+                // during the FPDI merge instead of reducing the document to text.
+                $pdfParts[] = $sourcePdfPath;
+            } elseif (trim($highlightedText) !== '') {
                 $this->renderPartialPdf('plagiarism.export_document', [
                     'documentHtml' => $highlightedText,
                     'documentStyles' => $documentStyles,
@@ -330,7 +337,13 @@ class PlagiarismExportService
             ], $reportPath);
             $pdfParts[] = $reportPath;
 
-            if ($this->mergePdfFiles($mergedPath, $pdfParts)) {
+            if ($this->mergePdfFiles(
+                $mergedPath,
+                $pdfParts,
+                $sourcePdfPath,
+                $sourcePdfPath !== null ? $check->highlights->all() : [],
+                $sourceIndexMap,
+            )) {
                 return response()->download($mergedPath, $downloadName, [
                     'Content-Type' => 'application/pdf',
                 ])->deleteFileAfterSend(true);
@@ -757,10 +770,36 @@ class PlagiarismExportService
         return $matches;
     }
 
-    private function mergePdfFiles(string $outputPath, array $pdfPaths): bool
-    {
+    private function mergePdfFiles(
+        string $outputPath,
+        array $pdfPaths,
+        ?string $highlightedSourcePath = null,
+        array $highlights = [],
+        array $sourceIndexMap = [],
+    ): bool {
         $pdf = new Fpdi();
         $importedPage = false;
+        $sourceTextRuns = [];
+
+        if ($highlightedSourcePath !== null
+            && $highlights !== []
+            && (filesize($highlightedSourcePath) ?: 0) <= 8 * 1024 * 1024) {
+            try {
+                $parserConfig = new \Smalot\PdfParser\Config();
+                $parserConfig->setDataTmFontInfoHasToBeIncluded(true);
+                $parser = new \Smalot\PdfParser\Parser([], $parserConfig);
+                $sourceDocument = $parser->parseFile($highlightedSourcePath);
+
+                foreach (array_slice($sourceDocument->getPages(), 0, 200) as $pageIndex => $sourcePage) {
+                    $sourceTextRuns[$pageIndex + 1] = $sourcePage->getDataTm();
+                }
+            } catch (\Throwable $exception) {
+                Log::warning('Could not read source PDF text positions for export highlights', [
+                    'file' => $highlightedSourcePath,
+                    'error' => $exception->getMessage(),
+                ]);
+            }
+        }
 
         foreach ($pdfPaths as $pdfPath) {
             if (! is_string($pdfPath) || ! is_file($pdfPath) || filesize($pdfPath) <= 0) {
@@ -774,6 +813,19 @@ class PlagiarismExportService
                 $orientation = $size['width'] > $size['height'] ? 'L' : 'P';
                 $pdf->AddPage($orientation, [$size['width'], $size['height']]);
                 $pdf->useTemplate($template, 0, 0, $size['width'], $size['height']);
+
+                if ($highlightedSourcePath !== null
+                    && realpath($pdfPath) === realpath($highlightedSourcePath)
+                    && isset($sourceTextRuns[$pageNumber])) {
+                    $this->drawPdfTextHighlights(
+                        $pdf,
+                        $sourceTextRuns[$pageNumber],
+                        (float) $size['height'],
+                        $highlights,
+                        $sourceIndexMap,
+                    );
+                }
+
                 $importedPage = true;
             }
         }
@@ -785,6 +837,136 @@ class PlagiarismExportService
         $pdf->Output('F', $outputPath);
 
         return is_file($outputPath) && filesize($outputPath) > 0;
+    }
+
+    private function drawPdfTextHighlights(
+        Fpdi $pdf,
+        array $textRuns,
+        float $pageHeightMm,
+        array $highlights,
+        array $sourceIndexMap,
+    ): int {
+        $pointsToMm = 25.4 / 72;
+        $pdf->SetLineWidth(0.65);
+        $lines = [];
+        $appliedHighlights = 0;
+
+        foreach ($textRuns as $textRun) {
+            if (! is_array($textRun) || ! isset($textRun[0], $textRun[1]) || ! is_array($textRun[0])) {
+                continue;
+            }
+
+            $matrix = $textRun[0];
+            $runText = trim((string) $textRun[1]);
+            if ($runText === '' || ! isset($matrix[4], $matrix[5])) {
+                continue;
+            }
+
+            // Avoid inaccurate marks for rotated/skewed text. The source page
+            // remains intact; only unsupported text orientation skips a mark.
+            if (abs((float) ($matrix[1] ?? 0)) > 0.01 || abs((float) ($matrix[2] ?? 0)) > 0.01) {
+                continue;
+            }
+
+            $fontSizePt = max(4.0, (float) ($textRun[3] ?? 10));
+            $baseline = (float) $matrix[5];
+            $lineIndex = null;
+            foreach ($lines as $index => $line) {
+                if (abs($line['baseline'] - $baseline) <= max(2.0, $fontSizePt * 0.35)) {
+                    $lineIndex = $index;
+                    break;
+                }
+            }
+
+            if ($lineIndex === null) {
+                $lineIndex = count($lines);
+                $lines[$lineIndex] = [
+                    'baseline' => $baseline,
+                    'text' => '',
+                    'segments' => [],
+                ];
+            }
+
+            $lineText = preg_replace('/\s+/u', ' ', $runText) ?? $runText;
+            $lineText = trim($lineText);
+            if ($lineText === '') {
+                continue;
+            }
+
+            $separator = $lines[$lineIndex]['text'] === '' ? '' : ' ';
+            $segmentStart = mb_strlen($lines[$lineIndex]['text'] . $separator);
+            $lines[$lineIndex]['text'] .= $separator . $lineText;
+            $lines[$lineIndex]['segments'][] = [
+                'start' => $segmentStart,
+                'end' => $segmentStart + mb_strlen($lineText),
+                'x' => (float) $matrix[4],
+                'baseline' => $baseline,
+                'font_size' => $fontSizePt,
+                'length' => max(1, mb_strlen($lineText)),
+            ];
+        }
+
+        foreach ($lines as $line) {
+            foreach ($highlights as $highlight) {
+                $needle = trim((string) ($highlight->original_text ?? ''));
+                if (mb_strlen($needle) < 4) {
+                    continue;
+                }
+
+                $matches = $this->normalizedTextMatches($line['text'], $needle);
+                if ($matches === []) {
+                    continue;
+                }
+
+                $sourceId = $highlight->plagiarism_source_id ?? null;
+                $sourceIndex = $sourceIndexMap[$sourceId] ?? 1;
+                $color = (string) ($highlight->color_code ?? $highlight->source?->color_code ?? '#DE60E5');
+                if (! preg_match('/^#?([0-9a-f]{6})$/i', $color, $colorMatch)) {
+                    $color = '#DE60E5';
+                    $colorMatch = ['#DE60E5', 'DE60E5'];
+                }
+
+                $hex = $colorMatch[1];
+                [$red, $green, $blue] = [
+                    hexdec(substr($hex, 0, 2)),
+                    hexdec(substr($hex, 2, 2)),
+                    hexdec(substr($hex, 4, 2)),
+                ];
+                $pdf->SetDrawColor($red, $green, $blue);
+                $pdf->SetTextColor($red, $green, $blue);
+
+                foreach ($matches as [$matchStart, $matchEnd]) {
+                    $labelDrawn = false;
+                    foreach ($line['segments'] as $segment) {
+                        $start = max($matchStart, $segment['start']);
+                        $end = min($matchEnd, $segment['end']);
+                        if ($start >= $end) {
+                            continue;
+                        }
+
+                        $segmentStart = $start - $segment['start'];
+                        $segmentWidthPt = $segment['font_size'] * 0.5 * $segment['length'];
+                        $xPt = $segment['x'] + ($segmentWidthPt * $segmentStart / $segment['length']);
+                        $widthPt = max(2.0, $segmentWidthPt * ($end - $start) / $segment['length']);
+                        $xMm = $xPt * $pointsToMm;
+                        $yMm = $pageHeightMm - ($segment['baseline'] * $pointsToMm) + 0.8;
+                        $pdf->Line($xMm, $yMm, $xMm + ($widthPt * $pointsToMm), $yMm);
+                        $appliedHighlights++;
+
+                        if ($sourceIndex > 0 && ! $labelDrawn) {
+                            $pdf->SetFont('Arial', 'B', 6);
+                            $pdf->Text(max(1, $xMm - 2), max(3, $yMm - 0.5), (string) $sourceIndex);
+                            $labelDrawn = true;
+                        }
+                    }
+                }
+
+                // One line uses the first matching source to avoid stacked marks.
+                break;
+            }
+        }
+
+        return $appliedHighlights;
     }
 
     private function renderPartialPdf(string $view, array $data, string $outputPath): void

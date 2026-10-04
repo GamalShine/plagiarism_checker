@@ -1,20 +1,19 @@
-<?php
-
-namespace Tests\Unit;
-
-use App\Services\DocumentPageRenderer;
-use App\Services\PlagiarismExportService;
-use DOMDocument;
-use PHPUnit\Framework\TestCase;
-use ReflectionMethod;
-
-class PlagiarismExportServiceTest extends TestCase
-{
-    public function test_only_paragraphs_with_twelve_point_runs_are_forced_to_justify(): void
-    {
-        $service = new PlagiarismExportService(new DocumentPageRenderer());
-        $method = new ReflectionMethod($service, 'justifyTwelvePointParagraphs');
-        $method->setAccessible(true);
+            $parserConfig = new \\Smalot\\PdfParser\\Config();
+            $parserConfig->setDataTmFontInfoHasToBeIncluded(true);
+            $positionParser = new \\Smalot\\PdfParser\\Parser([], $parserConfig);
+            $sourceRuns = $positionParser->parseFile($sourcePath)->getPages()[0]->getDataTm();
+            $drawPdf = new \\setasign\\Fpdi\\Fpdi();
+            $drawPdf->AddPage();
+            $drawMethod = new ReflectionMethod($service, 'drawPdfTextHighlights');
+            $drawMethod->setAccessible(true);
+            $this->assertGreaterThan(0, $drawMethod->invoke(
+                $service,
+                $drawPdf,
+                $sourceRuns,
+                297,
+                [$highlight],
+                [7 => 1],
+            ));
 
         $html = <<<'HTML'
 <html><body>
@@ -106,6 +105,67 @@ HTML;
         $this->assertStringContainsString('font-weight: normal !important', $markers->item(2)->getAttribute('style'));
         $this->assertStringContainsString('>1.  </span>', $result);
         $this->assertStringContainsString('>a)  </span>', $result);
+    }
+
+    public function test_pdf_merge_keeps_source_pages_and_applies_text_highlights(): void
+    {
+        $sourcePath = tempnam(sys_get_temp_dir(), 'source_pdf_');
+        $outputPath = tempnam(sys_get_temp_dir(), 'merged_pdf_');
+        $this->assertNotFalse($sourcePath);
+        $this->assertNotFalse($outputPath);
+
+        $sourceText = 'A distinctive plagiarism sentence appears here.';
+        $source = new \Dompdf\Dompdf();
+        $source->loadHtml('<html><body><p>' . $sourceText . '</p></body></html>');
+        $source->render();
+        file_put_contents($sourcePath, $source->output());
+
+        try {
+            $service = new PlagiarismExportService(new DocumentPageRenderer());
+            $method = new ReflectionMethod($service, 'mergePdfFiles');
+            $method->setAccessible(true);
+            $highlight = (object) [
+                'original_text' => 'distinctive plagiarism sentence',
+                'plagiarism_source_id' => 7,
+                'color_code' => '#DE60E5',
+            ];
+
+            $this->assertTrue($method->invoke(
+                $service,
+                $outputPath,
+                [$sourcePath],
+                $sourcePath,
+                [$highlight],
+                [7 => 1],
+            ));
+
+            $merged = new \setasign\Fpdi\Fpdi();
+            $this->assertSame(1, $merged->setSourceFile($outputPath));
+
+            $parser = new \Smalot\PdfParser\Parser();
+            $mergedDocument = $parser->parseFile($outputPath);
+            $this->assertStringContainsString($sourceText, $mergedDocument->getText());
+
+            $parserConfig = new \\Smalot\\PdfParser\\Config();
+            $parserConfig->setDataTmFontInfoHasToBeIncluded(true);
+            $positionParser = new \\Smalot\\PdfParser\\Parser([], $parserConfig);
+            $sourceRuns = $positionParser->parseFile($sourcePath)->getPages()[0]->getDataTm();
+            $drawPdf = new \\setasign\\Fpdi\\Fpdi();
+            $drawPdf->AddPage();
+            $drawMethod = new ReflectionMethod($service, 'drawPdfTextHighlights');
+            $drawMethod->setAccessible(true);
+              $this->assertGreaterThan(0, $drawMethod->invoke(
+                $service,
+                $drawPdf,
+                $sourceRuns,
+                297,
+                [$highlight],
+                [7 => 1],
+              ));
+        } finally {
+          @unlink($sourcePath);
+          @unlink($outputPath);
+        }
     }
 
     public function test_docx_heading_styles_are_mapped_without_marking_table_of_contents_entries(): void
