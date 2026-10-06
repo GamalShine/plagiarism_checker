@@ -3,7 +3,7 @@
 @section('title', 'Template Jurnal Akademik — NaskahCek')
 
 @section('content')
-<div class="min-h-screen bg-[#fcfdff] text-slate-900 selection:bg-blue-600 selection:text-white pt-[72px]"
+<div class="template-journal-page min-h-screen bg-[#fcfdff] text-slate-900 selection:bg-blue-600 selection:text-white pt-[72px]"
     x-data="templateViewer()">
 
     {{-- NAVBAR (FIXED TOP) --}}
@@ -457,55 +457,7 @@
         </div>
     </div>
 
-    {{-- FOOTER --}}
-    <footer id="footer" class="border-t border-slate-200 bg-white py-12 text-slate-600">
-        <div class="mx-auto max-w-[1240px] px-5 sm:px-6 lg:px-8">
-            <div class="grid gap-10 sm:grid-cols-2 lg:grid-cols-[1.7fr_1fr_1fr_1.2fr]">
-                <div>
-                    <div class="flex items-center gap-2.5">
-                        <img src="{{ asset('images/naskahceklogo.png') }}" alt="NaskahCek"
-                            class="h-9 w-9 rounded-xl object-cover">
-                        <span class="text-lg font-black text-slate-900">NaskahCek</span>
-                    </div>
-                    <p class="mt-4 max-w-sm text-xs leading-6 text-slate-500">
-                        Platform untuk membantu pemeriksaan similarity, perbaikan AI, dan persiapan naskah akademik secara praktis dan terpercaya.
-                    </p>
-                </div>
-
-                <div>
-                    <h3 class="text-xs font-black uppercase tracking-wider text-slate-900">Produk</h3>
-                    <ul class="mt-4 space-y-2.5 text-xs text-slate-500">
-                        <li><a href="{{ route('welcome') }}#fitur" class="hover:text-blue-600">Fitur</a></li>
-                        <li><a href="{{ route('welcome') }}#harga" class="hover:text-blue-600">Harga</a></li>
-                        <li><a href="{{ route('templates.index') }}" class="hover:text-blue-600">Template Jurnal</a></li>
-                    </ul>
-                </div>
-
-                <div>
-                    <h3 class="text-xs font-black uppercase tracking-wider text-slate-900">Bantuan</h3>
-                    <ul class="mt-4 space-y-2.5 text-xs text-slate-500">
-                        <li><a href="{{ route('welcome') }}#faq" class="hover:text-blue-600">FAQ</a></li>
-                        <li><a href="{{ route('welcome') }}#faq" class="hover:text-blue-600">Panduan Pengguna</a></li>
-                    </ul>
-                </div>
-
-                <div>
-                    <h3 class="text-xs font-black uppercase tracking-wider text-slate-900">Mulai Sekarang</h3>
-                    <p class="mt-4 text-xs leading-6 text-slate-500">
-                        Daftar dan coba platform NaskahCek untuk kebutuhan naskah akademik Anda.
-                    </p>
-                    <a href="{{ route('register') }}"
-                        class="mt-4 inline-flex rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-bold text-white shadow-lg shadow-blue-600/20 transition hover:bg-blue-700">
-                        Buat Akun Gratis
-                    </a>
-                </div>
-            </div>
-
-            <div class="mt-12 flex flex-col items-center justify-between border-t border-slate-100 pt-6 sm:flex-row text-xs text-slate-400">
-                <p>&copy; {{ date('Y') }} NaskahCek. Hak cipta dilindungi.</p>
-            </div>
-        </div>
-    </footer>
+    @include('partials.landing-footer')
 </div>
 
 <script>
@@ -603,4 +555,20 @@ function templateViewer() {
     }
 }
 </script>
+
+@push('styles')
+<style>
+.template-journal-page .rounded-sm,
+.template-journal-page .rounded-md,
+.template-journal-page .rounded-lg,
+.template-journal-page .rounded-xl,
+.template-journal-page .rounded-2xl,
+.template-journal-page .rounded-3xl,
+.template-journal-page [class~="rounded-[14px]"],
+.template-journal-page [class~="rounded-[18px]"],
+.template-journal-page [class~="rounded-[22px]"] {
+    border-radius: 8px !important;
+}
+</style>
+@endpush
 @endsection

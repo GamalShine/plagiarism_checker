@@ -165,12 +165,7 @@
         </div>
     </main>
 
-    <footer class="border-t border-slate-200 bg-white py-8">
-        <div class="mx-auto flex max-w-[1120px] flex-col items-center justify-between gap-3 px-5 text-xs text-slate-400 sm:flex-row sm:px-6 lg:px-8">
-            <p>&copy; {{ date('Y') }} NaskahCek. Hak cipta dilindungi.</p>
-            <a href="{{ route('welcome') }}" class="font-semibold text-slate-500 hover:text-blue-600">Kembali ke beranda</a>
-        </div>
-    </footer>
+    @include('partials.landing-footer')
 </div>
 
 <script>

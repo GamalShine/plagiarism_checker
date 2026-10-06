@@ -6,7 +6,7 @@
 
 @section('content')
 @if($publicMode ?? false)
-<nav class="fixed left-0 right-0 top-[42px] z-50 w-full border-b border-slate-200 bg-white shadow-sm">
+<nav class="public-plagiarism-nav fixed left-0 right-0 top-[42px] z-50 w-full border-b border-slate-200 bg-white shadow-sm">
     <div class="mx-auto flex h-[72px] max-w-[1180px] items-center justify-between px-5 sm:px-6 lg:px-8">
         <a href="{{ route('welcome') }}" class="flex items-center gap-2.5">
             <img src="{{ asset('images/naskahceklogo.png') }}" alt="NaskahCek" class="h-9 w-9 rounded-xl object-cover">
@@ -64,7 +64,7 @@
 </nav>
 @endif
 <div x-data="plagiarismChecker()"
-    class="{{ ($publicMode ?? false) ? 'relative z-10 mx-auto w-full max-w-[1080px] space-y-5 px-5 pb-6 pt-[122px] sm:space-y-6 sm:px-6 sm:pt-[130px] lg:px-8' : '' }}">
+    class="{{ ($publicMode ?? false) ? 'public-plagiarism-check relative z-10 mx-auto w-full max-w-[1080px] space-y-5 px-5 pb-[52px] pt-[86px] sm:space-y-6 sm:px-6 sm:pb-[52px] sm:pt-[92px] lg:px-8' : '' }}">
     <div x-show="isProcessingPayment" x-cloak class="mb-6 pc-card p-6 sm:p-8">
         <div class="flex items-center gap-4">
             <div
@@ -421,10 +421,42 @@
     </section>
     @endif
 </div>
+@if($publicMode ?? false)
+@include('partials.landing-footer')
+@endif
 @endsection
 
 @push('styles')
 <style>
+@if($publicMode ?? false)
+.public-plagiarism-check .pc-card,
+.public-plagiarism-check .pc-card-flat,
+.public-plagiarism-check .pc-upload-zone,
+.public-plagiarism-check .pc-source-card,
+.public-plagiarism-check .pc-btn,
+.public-plagiarism-check .pc-btn-primary,
+.public-plagiarism-check .pc-btn-secondary,
+.public-plagiarism-check .pc-btn-outline,
+.public-plagiarism-check .pc-btn-soft,
+.public-plagiarism-check .pc-btn-danger,
+.public-plagiarism-check [class~="rounded-sm"],
+.public-plagiarism-check [class~="rounded-md"],
+.public-plagiarism-check [class~="rounded-lg"],
+.public-plagiarism-check [class~="rounded-xl"],
+.public-plagiarism-check [class~="rounded-2xl"],
+.public-plagiarism-check [class~="rounded-3xl"],
+.public-plagiarism-check [class~="rounded-[14px]"],
+.public-plagiarism-check [class~="rounded-[18px]"],
+.public-plagiarism-check [class~="rounded-[22px]"] {
+    border-radius: 8px !important;
+}
+
+.public-plagiarism-nav .rounded-lg,
+.public-plagiarism-nav .rounded-xl {
+    border-radius: 8px !important;
+}
+@endif
+
 @media (max-width: 767px) {
     nav {
         height: 62px;

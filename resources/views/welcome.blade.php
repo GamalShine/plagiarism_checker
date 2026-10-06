@@ -900,62 +900,7 @@
     </section>
 </main>
 
-{{-- FOOTER --}}
-<footer id="footer" class="border-t border-slate-200 bg-white py-12">
-    <div class="mx-auto max-w-[1180px] px-5 sm:px-6 lg:px-8">
-        <div class="grid gap-10 sm:grid-cols-2 lg:grid-cols-[1.7fr_1fr_1fr_1.2fr]">
-            <div>
-                <div class="flex items-center gap-2.5">
-                    <img src="{{ asset('images/naskahceklogo.png') }}" alt="NaskahCek"
-                        class="h-9 w-9 rounded-xl object-cover">
-                    <span class="text-lg font-black">NaskahCek</span>
-                </div>
-                <p class="mt-4 max-w-sm text-xs leading-6 text-slate-500">
-                    Platform untuk membantu pemeriksaan, perbaikan, dan persiapan naskah akademik secara lebih
-                    praktis.
-                </p>
-            </div>
-
-            <div>
-                <h3 class="text-xs font-black uppercase tracking-wider text-slate-900">Produk</h3>
-                <ul class="mt-4 space-y-2.5 text-xs text-slate-500">
-                    <li><a href="#fitur" class="hover:text-blue-600">Fitur</a></li>
-                    <li><a href="#harga" class="hover:text-blue-600">Harga</a></li>
-                    <li><a href="#sumber" class="hover:text-blue-600">Sumber</a></li>
-                </ul>
-            </div>
-
-            <div>
-                <h3 class="text-xs font-black uppercase tracking-wider text-slate-900">Bantuan</h3>
-                <ul class="mt-4 space-y-2.5 text-xs text-slate-500">
-                    <li><a href="#faq" class="hover:text-blue-600">FAQ</a></li>
-                    <li><a href="#faq" class="hover:text-blue-600">Panduan Pengguna</a></li>
-                    <li><a href="#faq" class="hover:text-blue-600">Ketentuan</a></li>
-                </ul>
-            </div>
-
-            <div>
-                <h3 class="text-xs font-black uppercase tracking-wider text-slate-900">Hubungi Kami</h3>
-                <ul class="mt-4 space-y-2.5 text-xs text-slate-500">
-                    <li><a href="mailto:mynaskah94@gmail.com" class="transition hover:text-blue-600">mynaskah94@gmail.com</a></li>
-                    <li><a href="https://wa.me/6281295436152" target="_blank" rel="noopener noreferrer" class="transition hover:text-blue-600">+62 812-9543-6152</a></li>
-                </ul>
-                <div class="mt-4 flex gap-2">
-                    <span
-                        class="flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 text-xs">f</span>
-                    <span
-                        class="flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 text-xs">◎</span>
-                    <span
-                        class="flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 text-xs">in</span>
-                </div>
-            </div>
-        </div>
-
-        <div class="mt-10 border-t border-slate-100 pt-6 text-center text-[11px] text-slate-400">
-            &copy; {{ date('Y') }} NaskahCek. Hak Cipta Dilindungi.
-        </div>
-    </div>
-</footer>
+@include('partials.landing-footer')
 </div>
 @endsection
 
@@ -1259,7 +1204,7 @@ main>section:last-of-type>div {
 /* Footer */
 footer {
     padding-top: 34px !important;
-    padding-bottom: 24px !important;
+    padding-bottom: 16px !important;
 }
 
 /* Better mobile behaviour */

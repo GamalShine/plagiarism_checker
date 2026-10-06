@@ -27,6 +27,10 @@
         .landing-nav {
             top: 42px;
         }
+        nav .rounded-lg,
+        nav .rounded-xl {
+            border-radius: 8px !important;
+        }
         /* Fade-up animation */
         .fade-up {
             opacity: 0;
