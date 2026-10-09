@@ -13,7 +13,7 @@ class EnsurePackagePaymentCompleted
     {
         $user = $request->user();
 
-        if (! $user || $request->routeIs('user.payment.*')) {
+        if (! $user || $request->routeIs('user.payment.*') || $user->hasActivePackage()) {
             return $next($request);
         }
 

@@ -13,20 +13,20 @@ return [
         'duration' => '14 Hari',
         'days' => 14,
         'quota' => 10,
-        'amount' => 80000,
+        'amount' => 60000,
     ],
     'pro-30' => [
         'name' => 'Pro 30x Cek Plagiasi Turnitin',
         'duration' => '3 Bulan',
         'days' => 90,
         'quota' => 30,
-        'amount' => 200000,
+        'amount' => 115000,
     ],
     'ultimato-100' => [
         'name' => 'Ultimato 100x Cek Plagiasi Turnitin',
         'duration' => '6 Bulan',
         'days' => 180,
         'quota' => 100,
-        'amount' => 800000,
+        'amount' => 250000,
     ],
 ];

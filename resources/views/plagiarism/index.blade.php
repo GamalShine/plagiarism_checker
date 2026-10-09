@@ -65,6 +65,18 @@
 @endif
 <div x-data="plagiarismChecker()"
     class="{{ ($publicMode ?? false) ? 'public-plagiarism-check relative z-10 mx-auto w-full max-w-[1080px] space-y-5 px-5 pb-[52px] pt-[86px] sm:space-y-6 sm:px-6 sm:pb-[52px] sm:pt-[92px] lg:px-8' : '' }}">
+    @php
+        $currentUser = auth()->user();
+        $packageInactive = !($publicMode ?? false)
+            && $currentUser
+            && !$currentUser->isAdmin()
+            && $currentUser->package_key !== null
+            && !$currentUser->hasActivePackage();
+        $packageInactiveMessage = $currentUser?->package_expires_at?->isPast()
+            ? 'Masa aktif paket Anda sudah berakhir.'
+            : 'Kuota cek plagiarisme paket Anda sudah habis.';
+        $singleCheckPrice = (int) config('doku.single_check_price', 8000);
+    @endphp
     <div x-show="isProcessingPayment" x-cloak class="mb-6 pc-card p-6 sm:p-8">
         <div class="flex items-center gap-4">
             <div
@@ -93,8 +105,12 @@
 
     <div class="pc-card p-6 sm:p-8 relative overflow-hidden">
         <form
-            action="{{ ($publicMode ?? false) ? (auth()->check() ? route('user.plagiarism.pay') : route('free.plagiarism.check')) : (auth()->user()->isMember() ? route($routePrefix.'.plagiarism.check') : route($routePrefix.'.plagiarism.pay')) }}"
-            method="POST" enctype="multipart/form-data" @submit="isChecking = true">
+            action="{{ ($publicMode ?? false) ? (auth()->check() ? route('user.plagiarism.pay') : route('free.plagiarism.check')) : ((auth()->user()->isAdmin() || auth()->user()->hasActivePackage()) ? route($routePrefix.'.plagiarism.check') : route($routePrefix.'.plagiarism.pay')) }}"
+            method="POST" enctype="multipart/form-data"
+            data-package-inactive="{{ $packageInactive ? 'true' : 'false' }}"
+            data-package-inactive-message="{{ $packageInactiveMessage }}"
+            data-single-check-price="{{ $singleCheckPrice }}"
+            @submit="handleCheckSubmit($event)">
             @csrf
 
             @if($publicMode ?? false)
@@ -577,6 +593,44 @@ function plagiarismChecker() {
                 this.isProcessingPayment = true;
                 this.startProgress();
                 this.startGuestPolling();
+            }
+        },
+
+        async handleCheckSubmit(event) {
+            const form = event.currentTarget;
+            if (form.dataset.packageInactive !== 'true') {
+                this.isChecking = true;
+                return;
+            }
+
+            event.preventDefault();
+            const price = Number(form.dataset.singleCheckPrice || 8000);
+            const formattedPrice = new Intl.NumberFormat('id-ID').format(price);
+            const message = form.dataset.packageInactiveMessage || 'Kuota cek paket Anda sudah habis.';
+
+            if (!window.Swal) {
+                if (window.confirm(`${message} Lanjut cek sekali dengan biaya Rp ${formattedPrice}?`)) {
+                    this.isChecking = true;
+                    form.submit();
+                }
+                return;
+            }
+
+            const result = await window.Swal.fire({
+                icon: 'warning',
+                title: 'Paket tidak aktif',
+                text: `${message} Anda tetap bisa melanjutkan satu kali pengecekan dengan biaya Rp ${formattedPrice}.`,
+                showCancelButton: true,
+                reverseButtons: true,
+                confirmButtonText: `Cek sekali (Rp ${formattedPrice})`,
+                cancelButtonText: 'Batal',
+                confirmButtonColor: '#4f46e5',
+                cancelButtonColor: '#64748b',
+            });
+
+            if (result.isConfirmed) {
+                this.isChecking = true;
+                form.submit();
             }
         },
 

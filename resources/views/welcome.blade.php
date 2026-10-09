@@ -607,7 +607,7 @@
                     <p class="mt-4 text-[11px] font-semibold text-slate-500">(7 Hari)</p>
                     <p class="mt-2 text-[13px] leading-5 text-slate-600">Bug kamu yang lagi ngebut nyelesain tugas biar
                         selesai tepat waktu</p>
-                    <p class="mt-7 text-[2rem] font-black tracking-[-0.03em] text-slate-900">Rp 20.000</p>
+                    <p class="mt-7 text-[2rem] font-black tracking-[-0.03em] text-slate-900">Rp {{ number_format(config('plans.hemat-3.amount'), 0, ',', '.') }}</p>
                     <p class="mt-1 text-sm font-semibold text-slate-500">Kuota</p>
                     <div class="mt-4 flex items-center gap-2 text-[13px] font-medium text-slate-700">
                         <span
@@ -648,7 +648,7 @@
                     <p class="mt-4 text-[11px] font-semibold text-slate-500">(14 Hari)</p>
                     <p class="mt-2 text-[13px] leading-5 text-slate-600">Buat kamu deadliners yang lagi ngerajin
                         revisian dan tugas</p>
-                    <p class="mt-7 text-[2rem] font-black tracking-[-0.03em] text-slate-900">Rp 80.000</p>
+                    <p class="mt-7 text-[2rem] font-black tracking-[-0.03em] text-slate-900">Rp {{ number_format(config('plans.praktis-10.amount'), 0, ',', '.') }}</p>
                     <p class="mt-1 text-sm font-semibold text-slate-500">Kuota</p>
                     <div class="mt-4 flex items-center gap-2 text-[13px] font-medium text-slate-700">
                         <span
@@ -689,7 +689,7 @@
                     <p class="mt-4 text-[11px] font-semibold text-slate-500">(3 Bulan)</p>
                     <p class="mt-2 text-[13px] leading-5 text-slate-600">Buat kamu mahasiswa akhir yang lagi ngerjain
                         skripsi biar ga bolak balik cek plagiasi</p>
-                    <p class="mt-7 text-[2rem] font-black tracking-[-0.03em] text-slate-900">Rp 200.000</p>
+                    <p class="mt-7 text-[2rem] font-black tracking-[-0.03em] text-slate-900">Rp {{ number_format(config('plans.pro-30.amount'), 0, ',', '.') }}</p>
                     <p class="mt-1 text-sm font-semibold text-slate-500">Kuota</p>
                     <div class="mt-4 flex items-center gap-2 text-[13px] font-medium text-slate-700">
                         <span
@@ -730,7 +730,7 @@
                     <p class="mt-4 text-[11px] font-semibold text-slate-500">(6 Bulan)</p>
                     <p class="mt-2 text-[13px] leading-5 text-slate-600">Solusi buat kamu yang pengen cek buanyak
                         dokumen</p>
-                    <p class="mt-7 text-[2rem] font-black tracking-[-0.03em] text-slate-900">Rp 800.000</p>
+                    <p class="mt-7 text-[2rem] font-black tracking-[-0.03em] text-slate-900">Rp {{ number_format(config('plans.ultimato-100.amount'), 0, ',', '.') }}</p>
                     <p class="mt-1 text-sm font-semibold text-slate-500">Kuota</p>
                     <div class="mt-4 flex items-center gap-2 text-[13px] font-medium text-slate-700">
                         <span
@@ -917,7 +917,7 @@ Swal.fire({
                         <h3 class="text-sm font-black text-slate-900">Hemat 3x Cek Plagiasi Turnitin</h3>
                         <p class="mt-1 text-xs font-semibold text-slate-500">(7 Hari)</p>
                         <p class="mt-3 text-xs leading-5 text-slate-600">Bug kamu yang lagi ngebut nyelesain tugas biar selesai tepat waktu</p>
-                        <p class="mt-4 text-2xl font-black text-slate-900">Rp 20.000</p>
+                        <p class="mt-4 text-2xl font-black text-slate-900">Rp {{ number_format(config('plans.hemat-3.amount'), 0, ',', '.') }}</p>
                         <p class="mt-1 text-xs font-semibold text-slate-500">Kuota</p>
                         <ul class="mt-3 space-y-1 text-xs leading-5 text-slate-600">
                             <li>✓ 3x cek plagiasi</li><li>✓ Skip menu pembayaran</li><li>✓ Bisa cek sampai 800 halaman/file</li><li>✓ Dapat token 3x cek plagiasi</li><li>✓ Hasil langsung bisa di download</li>
@@ -928,7 +928,7 @@ Swal.fire({
                         <h3 class="text-sm font-black text-slate-900">Praktis 10x Cek Plagiasi Turnitin</h3>
                         <p class="mt-1 text-xs font-semibold text-slate-500">(14 Hari)</p>
                         <p class="mt-3 text-xs leading-5 text-slate-600">Buat kamu deadliners yang lagi ngerajin revisian dan tugas</p>
-                        <p class="mt-4 text-2xl font-black text-slate-900">Rp 80.000</p>
+                        <p class="mt-4 text-2xl font-black text-slate-900">Rp {{ number_format(config('plans.praktis-10.amount'), 0, ',', '.') }}</p>
                         <p class="mt-1 text-xs font-semibold text-slate-500">Kuota</p>
                         <ul class="mt-3 space-y-1 text-xs leading-5 text-slate-600">
                             <li>✓ 10x cek plagiasi</li><li>✓ Skip menu pembayaran</li><li>✓ Bisa cek sampai 800 halaman/file</li><li>✓ Dapat token 10x cek plagiasi</li><li>✓ Hasil langsung bisa di download</li>
@@ -939,7 +939,7 @@ Swal.fire({
                         <h3 class="text-sm font-black text-slate-900">Pro 30x Cek Plagiasi Turnitin</h3>
                         <p class="mt-1 text-xs font-semibold text-slate-500">(3 Bulan)</p>
                         <p class="mt-3 text-xs leading-5 text-slate-600">Buat kamu mahasiswa akhir yang lagi ngerjain skripsi biar ga bolak balik cek plagiasi</p>
-                        <p class="mt-4 text-2xl font-black text-slate-900">Rp 200.000</p>
+                        <p class="mt-4 text-2xl font-black text-slate-900">Rp {{ number_format(config('plans.pro-30.amount'), 0, ',', '.') }}</p>
                         <p class="mt-1 text-xs font-semibold text-slate-500">Kuota</p>
                         <ul class="mt-3 space-y-1 text-xs leading-5 text-slate-600">
                             <li>✓ 30x cek plagiasi</li><li>✓ Skip menu pembayaran</li><li>✓ Bisa cek sampai 800 halaman/file</li><li>✓ Dapat token 30x cek plagiasi</li><li>✓ Hasil langsung bisa di download</li>
@@ -950,7 +950,7 @@ Swal.fire({
                         <h3 class="text-sm font-black text-slate-900">Ultimato 100x Cek Plagiasi Turnitin</h3>
                         <p class="mt-1 text-xs font-semibold text-slate-500">(6 Bulan)</p>
                         <p class="mt-3 text-xs leading-5 text-slate-600">Solusi buat kamu yang pengen cek buanyak dokumen</p>
-                        <p class="mt-4 text-2xl font-black text-slate-900">Rp 800.000</p>
+                        <p class="mt-4 text-2xl font-black text-slate-900">Rp {{ number_format(config('plans.ultimato-100.amount'), 0, ',', '.') }}</p>
                         <p class="mt-1 text-xs font-semibold text-slate-500">Kuota</p>
                         <ul class="mt-3 space-y-1 text-xs leading-5 text-slate-600">
                             <li>✓ 100x cek plagiasi</li><li>✓ Skip menu pembayaran</li><li>✓ Bisa cek sampai 800 halaman/file</li><li>✓ Dapat token 100x cek plagiasi</li><li>✓ Hasil langsung bisa di download</li>

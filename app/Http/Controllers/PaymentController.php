@@ -125,7 +125,7 @@ class PaymentController extends Controller
             'temp_file_path'    => $tempPath,
             'original_filename' => $file->getClientOriginalName(),
             'sources'           => $request->input('sources'),
-            'amount'            => config('doku.check_price', 10000),
+            'amount'            => config('doku.single_check_price', 8000),
             'status'            => 'pending',
             'chapters'          => $chapters,
         ]);

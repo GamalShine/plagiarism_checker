@@ -25,4 +25,5 @@ return [
     |--------------------------------------------------------------------------
     */
     'check_price'    => env('DOKU_CHECK_PRICE', 8000),
+    'single_check_price' => env('DOKU_SINGLE_CHECK_PRICE', 8000),
 ];

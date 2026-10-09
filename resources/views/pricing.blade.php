@@ -70,7 +70,7 @@
                     </div>
                     <p class="mt-4 text-[11px] font-semibold text-slate-500">(7 Hari)</p>
                     <p class="mt-2 text-[13px] leading-5 text-slate-600">Bug kamu yang lagi ngebut nyelesain tugas biar selesai tepat waktu</p>
-                    <p class="mt-7 text-[2rem] font-black tracking-[-0.03em] text-slate-900">Rp 20.000</p>
+                    <p class="mt-7 text-[2rem] font-black tracking-[-0.03em] text-slate-900">Rp {{ number_format(config('plans.hemat-3.amount'), 0, ',', '.') }}</p>
                     <p class="mt-1 text-sm font-semibold text-slate-500">Kuota</p>
                     <div class="mt-4 flex items-center gap-2 text-[13px] font-medium text-slate-700">
                         <span class="flex h-4 w-4 items-center justify-center rounded-full border border-slate-700 bg-slate-800 text-[10px] font-bold text-white">✓</span>
@@ -94,7 +94,7 @@
                     <h2 class="text-[14px] font-black tracking-[-0.02em] text-slate-900">Praktis 10x Cek Plagiasi Turnitin</h2>
                     <p class="mt-4 text-[11px] font-semibold text-slate-500">(14 Hari)</p>
                     <p class="mt-2 text-[13px] leading-5 text-slate-600">Buat kamu deadliners yang lagi ngerajin revisian dan tugas</p>
-                    <p class="mt-7 text-[2rem] font-black tracking-[-0.03em] text-slate-900">Rp 80.000</p>
+                    <p class="mt-7 text-[2rem] font-black tracking-[-0.03em] text-slate-900">Rp {{ number_format(config('plans.praktis-10.amount'), 0, ',', '.') }}</p>
                     <p class="mt-1 text-sm font-semibold text-slate-500">Kuota</p>
                     <div class="mt-4 flex items-center gap-2 text-[13px] font-medium text-slate-700">
                         <span class="flex h-4 w-4 items-center justify-center rounded-full border border-slate-700 bg-slate-800 text-[10px] font-bold text-white">✓</span>
@@ -118,7 +118,7 @@
                     <h2 class="text-[14px] font-black tracking-[-0.02em] text-slate-900">Pro 30x Cek Plagiasi Turnitin</h2>
                     <p class="mt-4 text-[11px] font-semibold text-slate-500">(3 Bulan)</p>
                     <p class="mt-2 text-[13px] leading-5 text-slate-600">Buat kamu mahasiswa akhir yang lagi ngerjain skripsi biar ga bolak balik cek plagiasi</p>
-                    <p class="mt-7 text-[2rem] font-black tracking-[-0.03em] text-slate-900">Rp 200.000</p>
+                    <p class="mt-7 text-[2rem] font-black tracking-[-0.03em] text-slate-900">Rp {{ number_format(config('plans.pro-30.amount'), 0, ',', '.') }}</p>
                     <p class="mt-1 text-sm font-semibold text-slate-500">Kuota</p>
                     <div class="mt-4 flex items-center gap-2 text-[13px] font-medium text-slate-700">
                         <span class="flex h-4 w-4 items-center justify-center rounded-full border border-slate-700 bg-slate-800 text-[10px] font-bold text-white">✓</span>
@@ -142,7 +142,7 @@
                     <h2 class="text-[14px] font-black tracking-[-0.02em] text-slate-900">Ultimato 100x Cek Plagiasi Turnitin</h2>
                     <p class="mt-4 text-[11px] font-semibold text-slate-500">(6 Bulan)</p>
                     <p class="mt-2 text-[13px] leading-5 text-slate-600">Solusi buat kamu yang pengen cek buanyak dokumen</p>
-                    <p class="mt-7 text-[2rem] font-black tracking-[-0.03em] text-slate-900">Rp 800.000</p>
+                    <p class="mt-7 text-[2rem] font-black tracking-[-0.03em] text-slate-900">Rp {{ number_format(config('plans.ultimato-100.amount'), 0, ',', '.') }}</p>
                     <p class="mt-1 text-sm font-semibold text-slate-500">Kuota</p>
                     <div class="mt-4 flex items-center gap-2 text-[13px] font-medium text-slate-700">
                         <span class="flex h-4 w-4 items-center justify-center rounded-full border border-slate-700 bg-slate-800 text-[10px] font-bold text-white">✓</span>

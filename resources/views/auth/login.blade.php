@@ -73,7 +73,7 @@
                         <h3 class="text-sm font-black text-slate-900">Hemat 3x Cek Plagiasi Turnitin</h3>
                         <p class="mt-1 text-xs font-semibold text-slate-500">(7 Hari)</p>
                         <p class="mt-3 text-xs leading-5 text-slate-600">Bug kamu yang lagi ngebut nyelesain tugas biar selesai tepat waktu</p>
-                        <p class="mt-4 text-2xl font-black text-slate-900">Rp 20.000</p>
+                        <p class="mt-4 text-2xl font-black text-slate-900">Rp {{ number_format(config('plans.hemat-3.amount'), 0, ',', '.') }}</p>
                         <p class="mt-1 text-xs font-semibold text-slate-500">Kuota 3x cek plagiasi</p>
                         <p class="mt-2 text-xs leading-5 text-slate-600">✓ Skip menu pembayaran<br>✓ Bisa cek sampai 800 halaman/file<br>✓ Hasil langsung bisa di download</p>
                         <button type="button" data-package="hemat-3" class="mt-auto w-full rounded-lg bg-orange-500 px-3 py-2 text-xs font-bold text-white">Beli Paket</button>
@@ -82,7 +82,7 @@
                         <h3 class="text-sm font-black text-slate-900">Praktis 10x Cek Plagiasi Turnitin</h3>
                         <p class="mt-1 text-xs font-semibold text-slate-500">(14 Hari)</p>
                         <p class="mt-3 text-xs leading-5 text-slate-600">Buat kamu deadliners yang lagi ngerajin revisian dan tugas</p>
-                        <p class="mt-4 text-2xl font-black text-slate-900">Rp 80.000</p>
+                        <p class="mt-4 text-2xl font-black text-slate-900">Rp {{ number_format(config('plans.praktis-10.amount'), 0, ',', '.') }}</p>
                         <p class="mt-1 text-xs font-semibold text-slate-500">Kuota 10x cek plagiasi</p>
                         <p class="mt-2 text-xs leading-5 text-slate-600">✓ Skip menu pembayaran<br>✓ Bisa cek sampai 800 halaman/file<br>✓ Hasil langsung bisa di download</p>
                         <button type="button" data-package="praktis-10" class="mt-auto w-full rounded-lg bg-orange-500 px-3 py-2 text-xs font-bold text-white">Beli Paket</button>
@@ -91,7 +91,7 @@
                         <h3 class="text-sm font-black text-slate-900">Pro 30x Cek Plagiasi Turnitin</h3>
                         <p class="mt-1 text-xs font-semibold text-slate-500">(3 Bulan)</p>
                         <p class="mt-3 text-xs leading-5 text-slate-600">Buat kamu mahasiswa akhir yang lagi ngerjain skripsi biar ga bolak balik cek plagiasi</p>
-                        <p class="mt-4 text-2xl font-black text-slate-900">Rp 200.000</p>
+                        <p class="mt-4 text-2xl font-black text-slate-900">Rp {{ number_format(config('plans.pro-30.amount'), 0, ',', '.') }}</p>
                         <p class="mt-1 text-xs font-semibold text-slate-500">Kuota 30x cek plagiasi</p>
                         <p class="mt-2 text-xs leading-5 text-slate-600">✓ Skip menu pembayaran<br>✓ Bisa cek sampai 800 halaman/file<br>✓ Hasil langsung bisa di download</p>
                         <button type="button" data-package="pro-30" class="mt-auto w-full rounded-lg bg-orange-500 px-3 py-2 text-xs font-bold text-white">Beli Paket</button>
@@ -100,7 +100,7 @@
                         <h3 class="text-sm font-black text-slate-900">Ultimato 100x Cek Plagiasi Turnitin</h3>
                         <p class="mt-1 text-xs font-semibold text-slate-500">(6 Bulan)</p>
                         <p class="mt-3 text-xs leading-5 text-slate-600">Solusi buat kamu yang pengen cek buanyak dokumen</p>
-                        <p class="mt-4 text-2xl font-black text-slate-900">Rp 800.000</p>
+                        <p class="mt-4 text-2xl font-black text-slate-900">Rp {{ number_format(config('plans.ultimato-100.amount'), 0, ',', '.') }}</p>
                         <p class="mt-1 text-xs font-semibold text-slate-500">Kuota 100x cek plagiasi</p>
                         <p class="mt-2 text-xs leading-5 text-slate-600">✓ Skip menu pembayaran<br>✓ Bisa cek sampai 800 halaman/file<br>✓ Hasil langsung bisa di download</p>
                         <button type="button" data-package="ultimato-100" class="mt-auto w-full rounded-lg bg-orange-500 px-3 py-2 text-xs font-bold text-white">Beli Paket</button>

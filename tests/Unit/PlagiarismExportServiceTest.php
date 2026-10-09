@@ -132,6 +132,72 @@ HTML;
         $this->assertStringContainsString('distinctive plagiarism sentence', $html);
     }
 
+    public function test_export_retry_prefers_extracted_text_and_drops_rich_docx_styles(): void
+    {
+        $service = new PlagiarismExportService(new DocumentPageRenderer());
+        $method = new ReflectionMethod($service, 'prepareFallbackDocument');
+        $method->setAccessible(true);
+
+        $check = new PlagiarismCheck();
+        $document = new Document();
+        $document->content = 'Plain extracted text for PDF retry.';
+        $check->setRelation('document', $document);
+        $check->setRelation('highlights', collect());
+
+        $fallback = $method->invoke(
+            $service,
+            $check,
+            [],
+            '<div>Complex converted DOCX HTML</div>',
+            '.docx-style { page: page1; }',
+        );
+
+        $this->assertTrue($fallback['uses_extracted_text']);
+        $this->assertStringContainsString('Plain extracted text for PDF retry.', $fallback['html']);
+        $this->assertStringNotContainsString('Complex converted DOCX HTML', $fallback['html']);
+        $this->assertSame('', $fallback['styles']);
+    }
+
+    public function test_export_retry_keeps_rich_html_when_extracted_text_is_unavailable(): void
+    {
+        $service = new PlagiarismExportService(new DocumentPageRenderer());
+        $method = new ReflectionMethod($service, 'prepareFallbackDocument');
+        $method->setAccessible(true);
+
+        $check = new PlagiarismCheck();
+        $document = new Document();
+        $document->content = '';
+        $check->setRelation('document', $document);
+        $check->setRelation('highlights', collect());
+        $richHtml = '<div>Only available document content</div>';
+        $richStyles = '.docx-page { margin: 1in; }';
+
+        $fallback = $method->invoke($service, $check, [], $richHtml, $richStyles);
+
+        $this->assertFalse($fallback['uses_extracted_text']);
+        $this->assertSame($richHtml, $fallback['html']);
+        $this->assertSame($richStyles, $fallback['styles']);
+    }
+
+    public function test_large_document_fallback_is_split_into_bounded_chunks(): void
+    {
+        $service = new PlagiarismExportService(new DocumentPageRenderer());
+        $method = new ReflectionMethod($service, 'buildFallbackHighlightedTextChunks');
+        $method->setAccessible(true);
+
+        $check = new PlagiarismCheck();
+        $document = new Document();
+        $document->content = str_repeat("Paragraf pendek untuk uji ekspor.\n", 1500);
+        $check->setRelation('document', $document);
+        $check->setRelation('highlights', collect());
+
+        $chunks = $method->invoke($service, $check, []);
+
+        $this->assertCount(3, $chunks);
+        $this->assertLessThanOrEqual(40000, max(array_map('mb_strlen', $chunks)));
+        $this->assertStringContainsString('Paragraf pendek untuk uji ekspor.', implode('', $chunks));
+    }
+
     public function test_lightweight_mode_disables_raw_source_pdf_import_for_hosting_exports(): void
     {
         $service = new PlagiarismExportService(new DocumentPageRenderer());
@@ -155,7 +221,7 @@ HTML;
         $check = new PlagiarismCheck();
         $check->id = 42;
 
-        $this->assertSame('exports/v4/plagiarism_42.pdf', $service->getExportDiskPath($check));
+        $this->assertSame('exports/v5/plagiarism_42.pdf', $service->getExportDiskPath($check));
     }
 
     public function test_bundled_korean_font_renders_the_cover_metadata_without_replacement_glyphs(): void

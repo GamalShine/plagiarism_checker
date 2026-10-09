@@ -12,7 +12,10 @@ use Symfony\Component\HttpFoundation\Response;
 
 class PlagiarismExportService
 {
-    private const EXPORT_CACHE_VERSION = 'v4';
+    private const EXPORT_CACHE_VERSION = 'v5';
+    private const MAX_RICH_DOCX_EXPORT_CHARS = 100000;
+    private const MAX_RICH_DOCX_EXPORT_HIGHLIGHTS = 300;
+    private const FALLBACK_DOCUMENT_CHUNK_CHARS = 20000;
 
     public function __construct(
         private DocumentPageRenderer $documentPageRenderer,
@@ -74,6 +77,7 @@ class PlagiarismExportService
             $highlightedText,
             $downloadName,
             $includeAllSources,
+            $deleteTemporaryFile,
         );
 
         $tempDir = storage_path('app/temp/exports/' . $check->id . '_' . time());
@@ -326,6 +330,7 @@ class PlagiarismExportService
         string $highlightedText,
         string $downloadName,
         bool $includeAllSources = false,
+        bool $deleteTemporaryFile = true,
     ): Response {
         $storedPath = (string) ($check->document->file_path ?? '');
         $filePath = $storedPath !== '' ? Storage::disk('public')->path($storedPath) : '';
@@ -363,7 +368,13 @@ class PlagiarismExportService
             ]);
         }
 
-        if ($extension === 'docx') {
+        $forceChunkedTextExport = $extension === 'docx'
+            && (
+                mb_strlen((string) $check->document->content) > self::MAX_RICH_DOCX_EXPORT_CHARS
+                || $check->highlights->count() > self::MAX_RICH_DOCX_EXPORT_HIGHLIGHTS
+            );
+
+        if ($extension === 'docx' && ! $forceChunkedTextExport) {
             $documentHtml = $this->documentPageRenderer->renderDocxHtml($filePath, $check->document->id);
             if ($documentHtml !== null) {
                 $highlightedText = $this->highlightDocumentHtml(
@@ -374,8 +385,17 @@ class PlagiarismExportService
             }
         }
 
-        if (trim($highlightedText) === '') {
+        if (trim($highlightedText) === '' && ! $forceChunkedTextExport) {
             $highlightedText = $this->buildFallbackHighlightedText($check, $sourceIndexMap);
+        }
+
+        if ($forceChunkedTextExport) {
+            Log::warning('Large DOCX export will use chunked extracted text to avoid Dompdf memory exhaustion.', [
+                'check_id' => $check->id,
+                'document_id' => $check->document->id,
+                'content_length' => mb_strlen((string) $check->document->content),
+                'highlights_count' => $check->highlights->count(),
+            ]);
         }
 
         $highlightedText = $this->justifyTwelvePointParagraphs($highlightedText);
@@ -407,78 +427,84 @@ class PlagiarismExportService
         $sourceImportFailed = false;
         $sourcePagesMerged = false;
         $appliedSourceHighlights = null;
-        try {
-            $this->ensureArialFont();
+        if ($forceChunkedTextExport) {
+            $sourceImportFailed = true;
+        }
 
-            $this->renderPartialPdf('plagiarism.export_cover', compact('check'), $coverPath);
-            $pdfParts = [$coverPath];
+        if (! $forceChunkedTextExport) {
+            try {
+                $this->ensureArialFont();
 
-            if ($importOriginalSourcePdf) {
-                // Keep the uploaded PDF pages and apply PHP-side visual marks
-                // during the FPDI merge instead of reducing the document to text.
-                $pdfParts[] = $sourcePdfPath;
-            } elseif (trim($highlightedText) !== '') {
-                $this->renderPartialPdf('plagiarism.export_document', [
-                    'documentHtml' => $highlightedText,
-                    'documentStyles' => $documentStyles,
-                ], $documentPath);
-                $pdfParts[] = $documentPath;
-            }
+                $this->renderPartialPdf('plagiarism.export_cover', compact('check'), $coverPath);
+                $pdfParts = [$coverPath];
 
-            $this->renderPartialPdf('plagiarism.export_report', [
-                'check' => $check,
-                'highlightedText' => '',
-                'includeAllSources' => $includeAllSources,
-            ], $reportPath);
-            $pdfParts[] = $reportPath;
+                if ($importOriginalSourcePdf) {
+                    // Keep the uploaded PDF pages and apply PHP-side visual marks
+                    // during the FPDI merge instead of reducing the document to text.
+                    $pdfParts[] = $sourcePdfPath;
+                } elseif (trim($highlightedText) !== '') {
+                    $this->renderPartialPdf('plagiarism.export_document', [
+                        'documentHtml' => $highlightedText,
+                        'documentStyles' => $documentStyles,
+                    ], $documentPath);
+                    $pdfParts[] = $documentPath;
+                }
 
-            $mergeSucceeded = $this->mergePdfFiles(
-                $mergedPath,
-                $pdfParts,
-                $importOriginalSourcePdf ? $sourcePdfPath : null,
-                $importOriginalSourcePdf ? $check->highlights->all() : [],
-                $sourceIndexMap,
-                $appliedSourceHighlights,
-            );
+                $this->renderPartialPdf('plagiarism.export_report', [
+                    'check' => $check,
+                    'highlightedText' => '',
+                    'includeAllSources' => $includeAllSources,
+                ], $reportPath);
+                $pdfParts[] = $reportPath;
 
-            if ($mergeSucceeded) {
-                $sourcePagesMerged = $importOriginalSourcePdf;
-                if ($importOriginalSourcePdf
-                    && $check->highlights->isNotEmpty()
-                    && ($appliedSourceHighlights ?? 0) < $check->highlights->count()) {
+                $mergeSucceeded = $this->mergePdfFiles(
+                    $mergedPath,
+                    $pdfParts,
+                    $importOriginalSourcePdf ? $sourcePdfPath : null,
+                    $importOriginalSourcePdf ? $check->highlights->all() : [],
+                    $sourceIndexMap,
+                    $appliedSourceHighlights,
+                );
+
+                if ($mergeSucceeded) {
+                    $sourcePagesMerged = $importOriginalSourcePdf;
+                    if ($importOriginalSourcePdf
+                        && $check->highlights->isNotEmpty()
+                        && ($appliedSourceHighlights ?? 0) < $check->highlights->count()) {
+                        $sourceImportFailed = true;
+                        Log::warning('Not all source PDF highlights matched; switching to highlighted text fallback', [
+                            'check_id' => $check->id,
+                            'source_pdf' => $sourcePdfPath,
+                            'applied_highlights' => $appliedSourceHighlights,
+                            'highlights_count' => $check->highlights->count(),
+                        ]);
+                        @unlink($mergedPath);
+                    } else {
+                        return response()->download($mergedPath, $downloadName, [
+                            'Content-Type' => 'application/pdf',
+                        ])->deleteFileAfterSend(true);
+                    }
+                } elseif ($importOriginalSourcePdf) {
                     $sourceImportFailed = true;
-                    Log::warning('Not all source PDF highlights matched; switching to highlighted text fallback', [
+                    Log::warning('FPDI returned no merged PDF; switching to highlighted text fallback', [
                         'check_id' => $check->id,
                         'source_pdf' => $sourcePdfPath,
-                        'applied_highlights' => $appliedSourceHighlights,
-                        'highlights_count' => $check->highlights->count(),
+                        'parts' => count($pdfParts),
                     ]);
-                    @unlink($mergedPath);
-                } else {
-                    return response()->download($mergedPath, $downloadName, [
-                        'Content-Type' => 'application/pdf',
-                    ])->deleteFileAfterSend(true);
                 }
-            } elseif ($importOriginalSourcePdf) {
-                $sourceImportFailed = true;
-                Log::warning('FPDI returned no merged PDF; switching to highlighted text fallback', [
+            } catch (\Throwable $e) {
+                $sourceImportFailed = $importOriginalSourcePdf;
+                Log::warning('No-Python PDF export failed', [
                     'check_id' => $check->id,
                     'source_pdf' => $sourcePdfPath,
-                    'parts' => count($pdfParts),
+                    'source_import_failed' => $sourceImportFailed,
+                    'error' => $e->getMessage(),
                 ]);
+            } finally {
+                @unlink($coverPath);
+                @unlink($documentPath);
+                @unlink($reportPath);
             }
-        } catch (\Throwable $e) {
-            $sourceImportFailed = $importOriginalSourcePdf;
-            Log::warning('No-Python PDF export failed', [
-                'check_id' => $check->id,
-                'source_pdf' => $sourcePdfPath,
-                'source_import_failed' => $sourceImportFailed,
-                'error' => $e->getMessage(),
-            ]);
-        } finally {
-            @unlink($coverPath);
-            @unlink($documentPath);
-            @unlink($reportPath);
         }
 
         if ($sourceImportFailed || ! $importOriginalSourcePdf) {
@@ -488,7 +514,22 @@ class PlagiarismExportService
             $fallbackDocumentPath = $fallbackDir . DIRECTORY_SEPARATOR . 'document.pdf';
             $fallbackReportPath = $fallbackDir . DIRECTORY_SEPARATOR . 'report.pdf';
             $fallbackMergedPath = $fallbackDir . DIRECTORY_SEPARATOR . 'merged.pdf';
+            $fallbackDocument = $this->prepareFallbackDocument(
+                $check,
+                $sourceIndexMap,
+                $highlightedText,
+                $documentStyles,
+            );
 
+            if ($fallbackDocument['uses_extracted_text'] && $fallbackDocument['html'] !== $highlightedText) {
+                Log::warning('Retrying PDF export with extracted document text after rich document rendering failed.', [
+                    'check_id' => $check->id,
+                    'document_id' => $check->document->id,
+                    'content_length' => mb_strlen((string) $check->document->content),
+                ]);
+            }
+
+            $fallbackDocumentPaths = [];
             try {
                 $this->renderPartialPdf('plagiarism.export_cover', compact('check'), $fallbackCoverPath);
                 $fallbackParts = [$fallbackCoverPath];
@@ -497,12 +538,16 @@ class PlagiarismExportService
                     // back only because their text could not be highlighted.
                     $fallbackParts[] = $sourcePdfPath;
                 }
-                if (trim($highlightedText) !== '') {
+                foreach ($fallbackDocument['chunks'] as $chunkIndex => $documentHtmlChunk) {
+                    $chunkPath = count($fallbackDocument['chunks']) === 1
+                        ? $fallbackDocumentPath
+                        : $fallbackDir . DIRECTORY_SEPARATOR . 'document_' . str_pad((string) $chunkIndex, 3, '0', STR_PAD_LEFT) . '.pdf';
                     $this->renderPartialPdf('plagiarism.export_document', [
-                        'documentHtml' => $highlightedText,
-                        'documentStyles' => $documentStyles,
-                    ], $fallbackDocumentPath);
-                    $fallbackParts[] = $fallbackDocumentPath;
+                        'documentHtml' => $documentHtmlChunk,
+                        'documentStyles' => $fallbackDocument['styles'],
+                    ], $chunkPath);
+                    $fallbackDocumentPaths[] = $chunkPath;
+                    $fallbackParts[] = $chunkPath;
                 }
                 $this->renderPartialPdf('plagiarism.export_report', [
                     'check' => $check,
@@ -527,6 +572,9 @@ class PlagiarismExportService
                 @unlink($fallbackCoverPath);
                 @unlink($fallbackDocumentPath);
                 @unlink($fallbackReportPath);
+                foreach ($fallbackDocumentPaths as $path) {
+                    @unlink($path);
+                }
             }
         }
 
@@ -546,12 +594,21 @@ class PlagiarismExportService
         abort(500, 'Export PDF gagal digabungkan. Periksa log Laravel untuk detail proses export.');
     }
 
-    private function buildFallbackHighlightedText(PlagiarismCheck $check, array $sourceIndexMap): string
+    private function buildFallbackHighlightedText(
+        PlagiarismCheck $check,
+        array $sourceIndexMap,
+        int $chunkOffset = 0,
+        ?int $chunkLength = null,
+    ): string
     {
-        $content = str_replace(["\r\n", "\r"], "\n", (string) ($check->document->content ?? ''));
-        if (trim($content) === '') {
+        $fullContent = str_replace(["\r\n", "\r"], "\n", (string) ($check->document->content ?? ''));
+        if (trim($fullContent) === '') {
             return '';
         }
+
+        $chunkOffset = max(0, min($chunkOffset, mb_strlen($fullContent)));
+        $content = mb_substr($fullContent, $chunkOffset, $chunkLength);
+        $chunkEnd = $chunkOffset + mb_strlen($content);
 
         $highlights = [];
         foreach ($check->highlights as $highlight) {
@@ -562,14 +619,21 @@ class PlagiarismExportService
 
             $start = (int) $highlight->start_position;
             $end = (int) $highlight->end_position;
-            if ($end <= $start || mb_substr($content, $start, $end - $start) !== $needle) {
-                $foundAt = mb_stripos($content, $needle);
+            if ($end <= $start || mb_substr($fullContent, $start, $end - $start) !== $needle) {
+                $foundAt = mb_stripos($fullContent, $needle);
                 if ($foundAt === false) {
                     continue;
                 }
                 $start = $foundAt;
                 $end = $start + mb_strlen($needle);
             }
+
+            if ($end <= $chunkOffset || $start >= $chunkEnd) {
+                continue;
+            }
+
+            $start = max($start, $chunkOffset) - $chunkOffset;
+            $end = min($end, $chunkEnd) - $chunkOffset;
 
             $highlights[] = [
                 'start' => $start,
@@ -601,6 +665,54 @@ class PlagiarismExportService
         $html .= htmlspecialchars(mb_substr($content, $cursor), ENT_QUOTES, 'UTF-8');
 
         return nl2br($html);
+    }
+
+    private function buildFallbackHighlightedTextChunks(PlagiarismCheck $check, array $sourceIndexMap): array
+    {
+        $content = str_replace(["\r\n", "\r"], "\n", (string) ($check->document->content ?? ''));
+        $contentLength = mb_strlen($content);
+        if ($contentLength === 0 || trim($content) === '') {
+            return [];
+        }
+
+        $chunks = [];
+        for ($offset = 0; $offset < $contentLength; $offset += self::FALLBACK_DOCUMENT_CHUNK_CHARS) {
+            $html = $this->buildFallbackHighlightedText(
+                $check,
+                $sourceIndexMap,
+                $offset,
+                self::FALLBACK_DOCUMENT_CHUNK_CHARS,
+            );
+            if (trim($html) !== '') {
+                $chunks[] = $html;
+            }
+        }
+
+        return $chunks;
+    }
+
+    private function prepareFallbackDocument(
+        PlagiarismCheck $check,
+        array $sourceIndexMap,
+        string $currentHtml,
+        string $currentStyles,
+    ): array {
+        $fallbackChunks = $this->buildFallbackHighlightedTextChunks($check, $sourceIndexMap);
+        if ($fallbackChunks === []) {
+            return [
+                'html' => $currentHtml,
+                'chunks' => trim($currentHtml) !== '' ? [$currentHtml] : [],
+                'styles' => $currentStyles,
+                'uses_extracted_text' => false,
+            ];
+        }
+
+        return [
+            'html' => implode('', $fallbackChunks),
+            'chunks' => $fallbackChunks,
+            'styles' => '',
+            'uses_extracted_text' => true,
+        ];
     }
 
     private function justifyTwelvePointParagraphs(string $html): string
