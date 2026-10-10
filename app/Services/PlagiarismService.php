@@ -530,6 +530,7 @@ class PlagiarismService
 
     private function filterByChapters(string $text, array $chapters): string
     {
+        $text = mb_scrub($text, 'UTF-8');
         // Use standard capturing group ( ) instead of (?: ) so PREG_SPLIT_DELIM_CAPTURE returns the delimiter
         $pattern = '/\b(BAB\s+[IVXLCDM0-9]+|ABSTRAK|KATA PENGANTAR|DAFTAR ISI|DAFTAR PUSTAKA|LAMPIRAN)\b/ui';
         $parts = preg_split($pattern, $text, -1, PREG_SPLIT_DELIM_CAPTURE);
@@ -700,7 +701,7 @@ class PlagiarismService
 
     private function isUsableExtractedText(string $text, string $filePath): bool
     {
-        $text = trim($text);
+        $text = trim(mb_scrub($text, 'UTF-8'));
         if (mb_strlen($text) < 200) {
             return false;
         }
@@ -720,10 +721,11 @@ class PlagiarismService
 
     private function normalizeExtractedText(string $text): string
     {
+        $text = mb_scrub($text, 'UTF-8');
         $text = preg_replace("/\r\n|\r/", "\n", $text);
         $text = preg_replace('/[^\S\n]+/u', ' ', $text);
         $text = preg_replace('/\n{3,}/u', "\n\n", $text);
 
-        return trim($text);
+        return trim($text ?? '');
     }
 }
