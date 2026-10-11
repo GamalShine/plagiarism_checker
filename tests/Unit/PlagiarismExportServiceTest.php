@@ -264,7 +264,7 @@ HTML;
         $check = new PlagiarismCheck();
         $check->id = 42;
 
-        $this->assertSame('exports/v7/plagiarism_42.pdf', $service->getExportDiskPath($check));
+        $this->assertSame('exports/v8/plagiarism_42.pdf', $service->getExportDiskPath($check));
     }
 
     public function test_bundled_korean_font_renders_the_cover_metadata_without_replacement_glyphs(): void

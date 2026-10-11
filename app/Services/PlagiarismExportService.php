@@ -12,7 +12,7 @@ use Symfony\Component\HttpFoundation\Response;
 
 class PlagiarismExportService
 {
-    private const EXPORT_CACHE_VERSION = 'v7';
+    private const EXPORT_CACHE_VERSION = 'v8';
     private const MAX_RICH_DOCX_EXPORT_CHARS = 100000;
     private const MAX_RICH_DOCX_EXPORT_HIGHLIGHTS = 300;
     private const FALLBACK_DOCUMENT_CHUNK_CHARS = 20000;
@@ -357,11 +357,21 @@ class PlagiarismExportService
         $storedPath = (string) ($check->document->file_path ?? '');
         $filePath = $storedPath !== '' ? Storage::disk('public')->path($storedPath) : '';
         $extension = strtolower(pathinfo($storedPath ?: (string) $check->document->original_filename, PATHINFO_EXTENSION));
-        $sourceResolution = $this->documentPageRenderer->resolveSourcePdfForExport(
-            $filePath,
-            (int) $check->document->id,
-            $check->highlights->all(),
-        );
+        try {
+            $sourceResolution = $this->documentPageRenderer->resolveSourcePdfForExport(
+                $filePath,
+                (int) $check->document->id,
+                $check->highlights->all(),
+            );
+        } catch (\RuntimeException $exception) {
+            Log::error('DOCX-to-PDF conversion failed; refusing to export a reflowed HTML substitute.', [
+                'check_id' => $check->id,
+                'document_id' => $check->document->id,
+                'error' => $exception->getMessage(),
+            ]);
+
+            abort(503, $exception->getMessage());
+        }
         $sourcePdfPath = $sourceResolution['path'];
         if (! is_string($sourcePdfPath) || ! is_file($sourcePdfPath) || filesize($sourcePdfPath) <= 0) {
             $sourcePdfPath = null;

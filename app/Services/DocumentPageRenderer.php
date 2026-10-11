@@ -11,7 +11,7 @@ use PhpOffice\PhpWord\Settings;
 class DocumentPageRenderer
 {
     private const MAX_PAGES = 200;
-    private const DOCX_RENDER_VERSION = 'cloudconvert-layout-v13';
+    private const DOCX_RENDER_VERSION = 'cloudconvert-layout-v14';
     private int $lastWordHighlightRangeCount = 0;
 
     public function renderPages(string $filePath, int $documentId): array
@@ -1030,8 +1030,22 @@ class DocumentPageRenderer
 
     private function convertDocxToPdf(string $filePath, string $cacheDir): ?string
     {
+        $cloudConvert = app(CloudConvertService::class);
+        if ($cloudConvert->isConfigured()) {
+            $convertedPdf = $this->convertDocxWithCloudConvert($filePath, $cacheDir);
+            if ($convertedPdf) {
+                return $convertedPdf;
+            }
+
+            // Do not quietly reflow a DOCX through PHPWord/Dompdf after an
+            // explicitly configured cloud converter fails. That creates a
+            // misleading PDF whose layout no longer matches the upload.
+            throw new \RuntimeException(
+                'Konversi DOCX ke PDF melalui CloudConvert gagal. Export dihentikan agar format dokumen tidak berubah; periksa log Laravel dan konfigurasi API CloudConvert.'
+            );
+        }
+
         foreach ([
-            fn () => $this->convertDocxWithCloudConvert($filePath, $cacheDir),
             fn () => $this->convertDocxWithMicrosoftWord($filePath, $cacheDir),
             fn () => $this->convertDocxWithLibreOffice($filePath, $cacheDir),
             fn () => $this->convertDocxWithPhpWord($filePath, $cacheDir),

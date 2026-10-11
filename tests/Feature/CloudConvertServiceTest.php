@@ -3,7 +3,9 @@
 namespace Tests\Feature;
 
 use App\Services\CloudConvertService;
+use App\Services\DocumentPageRenderer;
 use Illuminate\Support\Facades\Http;
+use Mockery;
 use Tests\TestCase;
 
 class CloudConvertServiceTest extends TestCase
@@ -101,6 +103,29 @@ class CloudConvertServiceTest extends TestCase
         } finally {
             @unlink($inputPath);
             @unlink($outputPath);
+        }
+    }
+
+    public function test_configured_cloudconvert_failure_does_not_silently_fallback_to_reflowed_docx_pdf(): void
+    {
+        $converter = Mockery::mock(CloudConvertService::class);
+        $converter->shouldReceive('isConfigured')->once()->andReturn(true);
+        $converter->shouldReceive('convertDocxToPdf')->once()->andReturn(false);
+        $this->app->instance(CloudConvertService::class, $converter);
+
+        $inputPath = tempnam(sys_get_temp_dir(), 'cloudconvert_input_') . '.docx';
+        file_put_contents($inputPath, 'DOCX fixture');
+
+        try {
+            $renderer = new DocumentPageRenderer();
+            $method = new \ReflectionMethod($renderer, 'convertDocxToPdf');
+            $method->setAccessible(true);
+
+            $this->expectException(\RuntimeException::class);
+            $this->expectExceptionMessage('Konversi DOCX ke PDF melalui CloudConvert gagal');
+            $method->invoke($renderer, $inputPath, sys_get_temp_dir());
+        } finally {
+            @unlink($inputPath);
         }
     }
 }
