@@ -12,6 +12,7 @@ class DocumentPageRenderer
 {
     private const MAX_PAGES = 200;
     private const DOCX_RENDER_VERSION = 'word-com-highlight-v12';
+    private int $lastWordHighlightRangeCount = 0;
 
     public function renderPages(string $filePath, int $documentId): array
     {
@@ -52,6 +53,80 @@ class DocumentPageRenderer
         }
 
         return is_file($cachedPdf) ? $cachedPdf : $pdfPath;
+    }
+
+    /**
+     * Resolve the uploaded document to a PDF for layout-preserving exports.
+     * When Microsoft Word is available, let Word apply the marks before PDF
+     * conversion so the uploaded page geometry and typography stay intact.
+     *
+    * @return array{path: ?string, highlights_applied: bool, highlighted_ranges: int}
+     */
+    public function resolveSourcePdfForExport(string $filePath, int $documentId, array $highlights = []): array
+    {
+        if (! is_file($filePath)) {
+            return ['path' => null, 'highlights_applied' => false, 'highlighted_ranges' => 0];
+        }
+
+        $extension = strtolower(pathinfo($filePath, PATHINFO_EXTENSION));
+        if ($extension === 'pdf') {
+            return ['path' => $filePath, 'highlights_applied' => false, 'highlighted_ranges' => 0];
+        }
+
+        if ($extension !== 'docx') {
+            return ['path' => null, 'highlights_applied' => false, 'highlighted_ranges' => 0];
+        }
+
+        if (PHP_OS_FAMILY === 'Windows' && $highlights !== []) {
+            $cacheDir = $this->cacheDirectory($documentId, $filePath);
+            $highlightedCacheKey = md5(json_encode(array_map(
+                fn ($highlight) => [
+                    'text' => (string) ($highlight->original_text ?? ''),
+                    'color' => (string) ($highlight->color_code ?? $highlight->source?->color_code ?? 'transparent'),
+                ],
+                $highlights,
+            ), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . '|word-highlight-export-v2');
+            $highlightedCachePath = $cacheDir . DIRECTORY_SEPARATOR . 'word-highlighted-export-' . $highlightedCacheKey . '.pdf';
+            $highlightMetadataPath = $highlightedCachePath . '.json';
+
+            if (is_file($highlightedCachePath) && filesize($highlightedCachePath) > 0) {
+                $metadata = is_file($highlightMetadataPath)
+                    ? json_decode((string) file_get_contents($highlightMetadataPath), true)
+                    : null;
+                $highlightedRanges = (int) ($metadata['highlighted_ranges'] ?? 0);
+                if ($highlightedRanges > 0) {
+                    return [
+                        'path' => $highlightedCachePath,
+                        'highlights_applied' => true,
+                        'highlighted_ranges' => $highlightedRanges,
+                    ];
+                }
+            }
+
+            if (function_exists('shell_exec') && filter_var(env('WORD_COM_ENABLED', false), FILTER_VALIDATE_BOOL)) {
+                File::ensureDirectoryExists($cacheDir);
+                $highlightedPdf = $this->convertDocxWithWordHighlights($filePath, $cacheDir, $highlights);
+                if ($highlightedPdf && is_file($highlightedPdf) && filesize($highlightedPdf) > 0
+                    && $this->lastWordHighlightRangeCount > 0
+                    && @copy($highlightedPdf, $highlightedCachePath)) {
+                    @file_put_contents($highlightMetadataPath, json_encode([
+                        'highlighted_ranges' => $this->lastWordHighlightRangeCount,
+                    ]));
+
+                    return [
+                        'path' => $highlightedCachePath,
+                        'highlights_applied' => true,
+                        'highlighted_ranges' => $this->lastWordHighlightRangeCount,
+                    ];
+                }
+            }
+        }
+
+        return [
+            'path' => $this->resolveSourcePdf($filePath, $documentId),
+            'highlights_applied' => false,
+            'highlighted_ranges' => 0,
+        ];
     }
 
     public function resolveSourcePdfWithoutShell(string $filePath, int $documentId, array $highlights = []): ?string
@@ -971,6 +1046,7 @@ class DocumentPageRenderer
 
     private function convertDocxWithWordHighlights(string $filePath, string $cacheDir, array $highlights): ?string
     {
+        $this->lastWordHighlightRangeCount = 0;
         if (! function_exists('shell_exec') || ! filter_var(env('WORD_COM_ENABLED', false), FILTER_VALIDATE_BOOL)) {
             return null;
         }
@@ -990,17 +1066,43 @@ class DocumentPageRenderer
             $highlights,
         ), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
 
+        if (PHP_OS_FAMILY === 'Windows') {
+            $powershell = rtrim((string) getenv('WINDIR'), '\\/') . '\\System32\\WindowsPowerShell\\v1.0\\powershell.exe';
+            if (is_file($powershell)) {
+                $this->runWordHighlightScript($powershell, $script, $filePath, $outputPath, $highlightsPath);
+            }
+        }
+
+        if ($this->lastWordHighlightRangeCount === 0) {
+            $this->runWordHighlightScript('powershell', $script, $filePath, $outputPath, $highlightsPath);
+        }
+
+        return $this->lastWordHighlightRangeCount > 0 && is_file($outputPath) && filesize($outputPath) > 0
+            ? $outputPath
+            : null;
+    }
+
+    private function runWordHighlightScript(
+        string $powershell,
+        string $script,
+        string $filePath,
+        string $outputPath,
+        string $highlightsPath,
+    ): void {
         $command = sprintf(
-            'powershell -NoProfile -ExecutionPolicy Bypass -File %s -InputPath %s -OutputPath %s -HighlightsPath %s 2>&1',
+            '%s -NoProfile -ExecutionPolicy Bypass -File %s -InputPath %s -OutputPath %s -HighlightsPath %s 2>&1',
+            escapeshellarg($powershell),
             escapeshellarg($script),
             escapeshellarg($filePath),
             escapeshellarg($outputPath),
             escapeshellarg($highlightsPath),
         );
 
-        shell_exec($command);
-
-        return is_file($outputPath) && filesize($outputPath) > 0 ? $outputPath : null;
+        $output = shell_exec($command);
+        if (is_string($output)
+            && preg_match('/HIGHLIGHTS_APPLIED=(\d+)/', $output, $matches) === 1) {
+            $this->lastWordHighlightRangeCount = (int) $matches[1];
+        }
     }
 
     private function convertDocxWithMicrosoftWord(string $filePath, string $cacheDir): ?string

@@ -12,7 +12,7 @@ use Symfony\Component\HttpFoundation\Response;
 
 class PlagiarismExportService
 {
-    private const EXPORT_CACHE_VERSION = 'v5';
+    private const EXPORT_CACHE_VERSION = 'v7';
     private const MAX_RICH_DOCX_EXPORT_CHARS = 100000;
     private const MAX_RICH_DOCX_EXPORT_HIGHLIGHTS = 300;
     private const FALLBACK_DOCUMENT_CHUNK_CHARS = 20000;
@@ -325,6 +325,28 @@ class PlagiarismExportService
         return ! $effectiveMode;
     }
 
+    private function shouldUseLargeDocumentTextFallback(
+        string $extension,
+        ?string $sourcePdfPath,
+        int $contentLength,
+        int $highlightsCount,
+        ?bool $lightweightMode = null,
+    ): bool {
+        if ($extension !== 'docx'
+            || ($contentLength <= self::MAX_RICH_DOCX_EXPORT_CHARS
+                && $highlightsCount <= self::MAX_RICH_DOCX_EXPORT_HIGHLIGHTS)) {
+            return false;
+        }
+
+        return ! $this->shouldImportSourcePdfForExport($sourcePdfPath, $lightweightMode);
+    }
+
+    private function hasNativeSourceHighlights(array $sourceResolution): bool
+    {
+        return ($sourceResolution['highlights_applied'] ?? false) === true
+            && (int) ($sourceResolution['highlighted_ranges'] ?? 0) > 0;
+    }
+
     private function renderNoPythonPdf(
         PlagiarismCheck $check,
         string $highlightedText,
@@ -335,10 +357,24 @@ class PlagiarismExportService
         $storedPath = (string) ($check->document->file_path ?? '');
         $filePath = $storedPath !== '' ? Storage::disk('public')->path($storedPath) : '';
         $extension = strtolower(pathinfo($storedPath ?: (string) $check->document->original_filename, PATHINFO_EXTENSION));
-        $isSourcePdf = ($extension === 'pdf' || strtolower((string) $check->document->mime_type) === 'application/pdf')
-            && is_file($filePath)
-            && filesize($filePath) > 0;
-        $sourcePdfPath = $isSourcePdf ? $filePath : null;
+        $sourceResolution = $this->documentPageRenderer->resolveSourcePdfForExport(
+            $filePath,
+            (int) $check->document->id,
+            $check->highlights->all(),
+        );
+        $sourcePdfPath = $sourceResolution['path'];
+        if (! is_string($sourcePdfPath) || ! is_file($sourcePdfPath) || filesize($sourcePdfPath) <= 0) {
+            $sourcePdfPath = null;
+        }
+        $sourceHighlightsApplied = $this->hasNativeSourceHighlights($sourceResolution) && $sourcePdfPath !== null;
+        if ($sourceHighlightsApplied) {
+            Log::info('DOCX export uses the original Word layout with native highlights.', [
+                'check_id' => $check->id,
+                'source_pdf' => $sourcePdfPath,
+                'highlighted_ranges' => (int) ($sourceResolution['highlighted_ranges'] ?? 0),
+                'highlight_records' => $check->highlights->count(),
+            ]);
+        }
 
         if ($sourcePdfPath === null) {
             Log::warning('PDF export source file is unavailable; exporting extracted text if present', [
@@ -368,13 +404,14 @@ class PlagiarismExportService
             ]);
         }
 
-        $forceChunkedTextExport = $extension === 'docx'
-            && (
-                mb_strlen((string) $check->document->content) > self::MAX_RICH_DOCX_EXPORT_CHARS
-                || $check->highlights->count() > self::MAX_RICH_DOCX_EXPORT_HIGHLIGHTS
-            );
+        $forceChunkedTextExport = $this->shouldUseLargeDocumentTextFallback(
+            $extension,
+            $sourcePdfPath,
+            mb_strlen((string) $check->document->content),
+            $check->highlights->count(),
+        );
 
-        if ($extension === 'docx' && ! $forceChunkedTextExport) {
+        if ($extension === 'docx' && ! $forceChunkedTextExport && ! $importOriginalSourcePdf) {
             $documentHtml = $this->documentPageRenderer->renderDocxHtml($filePath, $check->document->id);
             if ($documentHtml !== null) {
                 $highlightedText = $this->highlightDocumentHtml(
@@ -460,8 +497,8 @@ class PlagiarismExportService
                 $mergeSucceeded = $this->mergePdfFiles(
                     $mergedPath,
                     $pdfParts,
-                    $importOriginalSourcePdf ? $sourcePdfPath : null,
-                    $importOriginalSourcePdf ? $check->highlights->all() : [],
+                    $importOriginalSourcePdf && ! $sourceHighlightsApplied ? $sourcePdfPath : null,
+                    $importOriginalSourcePdf && ! $sourceHighlightsApplied ? $check->highlights->all() : [],
                     $sourceIndexMap,
                     $appliedSourceHighlights,
                 );
@@ -469,21 +506,20 @@ class PlagiarismExportService
                 if ($mergeSucceeded) {
                     $sourcePagesMerged = $importOriginalSourcePdf;
                     if ($importOriginalSourcePdf
+                        && ! $sourceHighlightsApplied
                         && $check->highlights->isNotEmpty()
                         && ($appliedSourceHighlights ?? 0) < $check->highlights->count()) {
-                        $sourceImportFailed = true;
-                        Log::warning('Not all source PDF highlights matched; switching to highlighted text fallback', [
+                        Log::warning('Some source PDF highlights could not be mapped; preserving the original document layout in the export.', [
                             'check_id' => $check->id,
                             'source_pdf' => $sourcePdfPath,
                             'applied_highlights' => $appliedSourceHighlights,
                             'highlights_count' => $check->highlights->count(),
                         ]);
-                        @unlink($mergedPath);
-                    } else {
-                        return response()->download($mergedPath, $downloadName, [
-                            'Content-Type' => 'application/pdf',
-                        ])->deleteFileAfterSend(true);
                     }
+
+                    return response()->download($mergedPath, $downloadName, [
+                        'Content-Type' => 'application/pdf',
+                    ])->deleteFileAfterSend($deleteTemporaryFile);
                 } elseif ($importOriginalSourcePdf) {
                     $sourceImportFailed = true;
                     Log::warning('FPDI returned no merged PDF; switching to highlighted text fallback', [
@@ -723,6 +759,7 @@ class PlagiarismExportService
 
         $dom = new \DOMDocument('1.0', 'UTF-8');
         @$dom->loadHTML('<?xml encoding="UTF-8"><div id="justify-root">' . $html . '</div>', LIBXML_NOERROR | LIBXML_NOWARNING);
+
         $root = $dom->getElementById('justify-root');
         if (! $root) {
             return $html;

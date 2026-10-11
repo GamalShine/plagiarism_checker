@@ -12,6 +12,8 @@ param(
 $ErrorActionPreference = 'Stop'
 $word = $null
 $document = $null
+$appliedHighlightRanges = 0
+$searchedPhraseCount = 0
 
 function Convert-HexToWordColor([string]$HexColor) {
     $hex = ($HexColor -replace '#', '').Trim()
@@ -36,7 +38,8 @@ try {
         throw "Input file not found: $InputPath"
     }
 
-    $highlights = @(Get-Content -LiteralPath $HighlightsPath -Raw | ConvertFrom-Json)
+    $highlightsJson = Get-Content -LiteralPath $HighlightsPath -Raw
+    $highlights = ConvertFrom-Json -InputObject $highlightsJson
     $outputDirectory = Split-Path -Parent $OutputPath
     if ($outputDirectory -and -not (Test-Path -LiteralPath $outputDirectory)) {
         New-Item -ItemType Directory -Force -Path $outputDirectory | Out-Null
@@ -46,6 +49,7 @@ try {
     $word.Visible = $false
     $word.DisplayAlerts = 0
     $document = $word.Documents.Open((Resolve-Path -LiteralPath $InputPath).Path, $false, $false)
+    $searchedPhrases = @{}
 
     foreach ($item in $highlights) {
         $needle = [string]$item.text
@@ -53,38 +57,33 @@ try {
             continue
         }
 
-        $needle = (($needle -replace '[\r\n\t]+', ' ') -replace '\s+', ' ').Trim()
-        if ($needle.Length -eq 0) {
-            continue
-        }
-
-        # Match the browser preview with Word-safe chunks. Word rejects long
-        # Find.Text values, so split long sentences at word boundaries.
-        $words = @($needle -split ' ' | Where-Object { $_.Length -gt 2 })
         $searchPhrases = @()
-        $chunk = ''
-        foreach ($wordPart in ($needle -split ' ')) {
-            $candidate = if ($chunk) { "$chunk $wordPart" } else { $wordPart }
-            if ($candidate.Length -gt 180 -and $chunk) {
-                $searchPhrases += $chunk
-                $chunk = $wordPart
-            } else {
-                $chunk = $candidate
+        # Highlight records may span multiple DOCX paragraphs. Word Find cannot
+        # match across paragraph marks, so search independently inside each line
+        # and add overlapping short phrases for long paragraphs.
+        foreach ($line in ($needle -split '[\r\n]+')) {
+            $line = (($line -replace '\t+', ' ') -replace '\s+', ' ').Trim()
+            if ($line.Length -lt 6) {
+                continue
             }
-        }
-        if ($chunk) {
-            $searchPhrases += $chunk
-        }
 
-        if ($words.Count -ge 4) {
-            $searchPhrases += (($words | Select-Object -First 6) -join ' ')
-            if ($words.Count -ge 10) {
-                $searchPhrases += (($words | Select-Object -Skip 4 -First 6) -join ' ')
+            $lineWords = @($line -split ' ' | Where-Object { $_.Length -gt 0 })
+            if ($line.Length -le 180) {
+                $searchPhrases += $line
+            }
+
+            for ($start = 0; $start -lt $lineWords.Count; $start += 4) {
+                $take = [Math]::Min(6, $lineWords.Count - $start)
+                if ($take -lt 4) {
+                    continue
+                }
+
+                $searchPhrases += (($lineWords | Select-Object -Skip $start -First $take) -join ' ')
             }
         }
 
         foreach ($phrase in ($searchPhrases | Select-Object -Unique)) {
-            if ([string]::IsNullOrWhiteSpace($phrase) -or $phrase.Length -lt 6) {
+            if ([string]::IsNullOrWhiteSpace($phrase) -or $phrase.Length -lt 6 -or $searchedPhrases.ContainsKey($phrase)) {
                 continue
             }
 
@@ -92,9 +91,11 @@ try {
             if ($null -eq $color) {
                 continue
             }
+            $searchedPhrases[$phrase] = $true
 
             $search = $document.Content.Duplicate
             $find = $search.Find
+            $searchedPhraseCount++
             $find.ClearFormatting()
             $find.Text = $phrase
             $find.Forward = $true
@@ -103,6 +104,7 @@ try {
 
             while ($find.Execute()) {
                 $search.Shading.BackgroundPatternColor = $color
+                $appliedHighlightRanges++
                 $search.Collapse(0)
                 $find = $search.Find
                 $find.ClearFormatting()
@@ -122,7 +124,8 @@ try {
         throw 'Word did not produce a highlighted PDF file.'
     }
 
-    Write-Output 'OK'
+    Write-Output "SEARCH_PHRASES=$searchedPhraseCount"
+    Write-Output "HIGHLIGHTS_APPLIED=$appliedHighlightRanges"
 }
 catch {
     if ($document) { $document.Close($false) }

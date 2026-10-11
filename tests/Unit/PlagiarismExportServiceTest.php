@@ -215,13 +215,56 @@ HTML;
         @unlink($sourcePdfPath);
     }
 
+    public function test_large_docx_uses_original_layout_pdf_when_conversion_is_available(): void
+    {
+        $service = new PlagiarismExportService(new DocumentPageRenderer());
+        $method = new ReflectionMethod($service, 'shouldUseLargeDocumentTextFallback');
+        $method->setAccessible(true);
+        $sourcePdfPath = tempnam(sys_get_temp_dir(), 'converted_docx_pdf_');
+        $this->assertNotFalse($sourcePdfPath);
+
+        try {
+            file_put_contents($sourcePdfPath, '%PDF-1.4 source');
+
+            $this->assertFalse($method->invoke($service, 'docx', $sourcePdfPath, 193662, 763, false));
+            $this->assertTrue($method->invoke($service, 'docx', null, 193662, 763, false));
+            $this->assertTrue($method->invoke($service, 'docx', $sourcePdfPath, 193662, 763, true));
+            $this->assertFalse($method->invoke($service, 'docx', $sourcePdfPath, 50000, 20, false));
+        } finally {
+            @unlink($sourcePdfPath);
+        }
+    }
+
+    public function test_native_highlight_metadata_is_required_to_use_word_rendered_source(): void
+    {
+        $service = new PlagiarismExportService(new DocumentPageRenderer());
+        $method = new ReflectionMethod($service, 'hasNativeSourceHighlights');
+        $method->setAccessible(true);
+
+        $this->assertTrue($method->invoke($service, [
+            'path' => 'source.pdf',
+            'highlights_applied' => true,
+            'highlighted_ranges' => 12,
+        ]));
+        $this->assertFalse($method->invoke($service, [
+            'path' => 'source.pdf',
+            'highlights_applied' => true,
+            'highlighted_ranges' => 0,
+        ]));
+        $this->assertFalse($method->invoke($service, [
+            'path' => 'source.pdf',
+            'highlights_applied' => false,
+            'highlighted_ranges' => 12,
+        ]));
+    }
+
     public function test_export_cache_uses_a_new_versioned_path_after_pdf_template_changes(): void
     {
         $service = new PlagiarismExportService(new DocumentPageRenderer());
         $check = new PlagiarismCheck();
         $check->id = 42;
 
-        $this->assertSame('exports/v5/plagiarism_42.pdf', $service->getExportDiskPath($check));
+        $this->assertSame('exports/v7/plagiarism_42.pdf', $service->getExportDiskPath($check));
     }
 
     public function test_bundled_korean_font_renders_the_cover_metadata_without_replacement_glyphs(): void
