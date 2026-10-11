@@ -76,21 +76,21 @@ PDF/DOCX conversion features that require Python or Microsoft Word may not work 
 
 ## 7. PDF export on shared hosting
 
-The PDF export has a PHP-only fallback and does not require Node.js when the uploaded document is already a PDF with a text layer. Use these production settings:
+The PDF export can use CloudConvert to turn DOCX into a layout-preserving PDF, then overlay highlights on the converted PDF. Add a CloudConvert API key in Hostinger's private `.env` (never commit the key) and use these settings:
 
 ```env
-PDF_LIGHTWEIGHT=true
-PDF_EXPORT_CACHE=true
-NODE_PATH=
+PDF_LIGHTWEIGHT=false
 WORD_COM_ENABLED=false
-PYTHON_PATH=
+LIBREOFFICE_PATH=
+CLOUDCONVERT_API_KEY=your-private-cloudconvert-api-key
+CLOUDCONVERT_REQUEST_TIMEOUT=30
+CLOUDCONVERT_MAX_WAIT_SECONDS=240
+CLOUDCONVERT_POLL_INTERVAL_SECONDS=3
 ```
 
-With `PDF_LIGHTWEIGHT=true`, export uses the PHP-only summary path and does not
-require Python, PyMuPDF, or a Python virtual environment. DOCX downloads already
-use PHPWord and PDF merging uses the installed FPDI/FPDF packages. Set
-`PDF_LIGHTWEIGHT=false` only when Python and PyMuPDF are available and the full
-page-preserving PDF export is required.
+The uploaded DOCX is sent to CloudConvert for conversion. The application downloads the converted PDF, applies highlight overlays, merges it with the report, and requests immediate deletion of the CloudConvert job when finished. This uses CloudConvert credits and sends document contents to that third party; confirm that this is acceptable for your users/data before enabling it. If no API key is configured or CloudConvert fails, the renderer tries the configured LibreOffice converter and then PHPWord/Dompdf fallback.
+
+For existing PDF uploads, the original PDF is used directly. Keep `PDF_LIGHTWEIGHT=false` so source pages and highlights are included instead of falling back to extracted/reflowed HTML text.
 
 After deployment, clear the Laravel runtime cache:
 
@@ -99,4 +99,4 @@ php artisan optimize:clear
 php artisan storage:link
 ```
 
-If the uploaded file is DOCX, PHP must be able to convert it to PDF. Shared hosting without LibreOffice, Microsoft Word, or another DOCX converter cannot preserve the original Word layout. In that case, upload a PDF source or install a server-side DOCX converter.
+After changing the conversion provider/key, delete cached export PDFs under `storage/app/public/exports/v*/` for checks that need regeneration. If CloudConvert is unavailable, PHP must have `shell_exec` and the host must provide LibreOffice at the configured `LIBREOFFICE_PATH`; otherwise use PDF uploads to retain source layout.

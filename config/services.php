@@ -35,4 +35,12 @@ return [
         ],
     ],
 
+    'cloudconvert' => [
+        'api_key' => env('CLOUDCONVERT_API_KEY'),
+        'api_url' => env('CLOUDCONVERT_API_URL', 'https://api.cloudconvert.com/v2'),
+        'request_timeout' => (int) env('CLOUDCONVERT_REQUEST_TIMEOUT', 30),
+        'max_wait_seconds' => (int) env('CLOUDCONVERT_MAX_WAIT_SECONDS', 240),
+        'poll_interval_seconds' => (int) env('CLOUDCONVERT_POLL_INTERVAL_SECONDS', 3),
+    ],
+
 ];

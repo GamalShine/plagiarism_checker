@@ -11,7 +11,7 @@ use PhpOffice\PhpWord\Settings;
 class DocumentPageRenderer
 {
     private const MAX_PAGES = 200;
-    private const DOCX_RENDER_VERSION = 'word-com-highlight-v12';
+    private const DOCX_RENDER_VERSION = 'cloudconvert-layout-v13';
     private int $lastWordHighlightRangeCount = 0;
 
     public function renderPages(string $filePath, int $documentId): array
@@ -1031,6 +1031,7 @@ class DocumentPageRenderer
     private function convertDocxToPdf(string $filePath, string $cacheDir): ?string
     {
         foreach ([
+            fn () => $this->convertDocxWithCloudConvert($filePath, $cacheDir),
             fn () => $this->convertDocxWithMicrosoftWord($filePath, $cacheDir),
             fn () => $this->convertDocxWithLibreOffice($filePath, $cacheDir),
             fn () => $this->convertDocxWithPhpWord($filePath, $cacheDir),
@@ -1042,6 +1043,21 @@ class DocumentPageRenderer
         }
 
         return null;
+    }
+
+    private function convertDocxWithCloudConvert(string $filePath, string $cacheDir): ?string
+    {
+        $outputPath = $cacheDir . DIRECTORY_SEPARATOR . 'cloudconvert-source.pdf';
+        if (! app(CloudConvertService::class)->convertDocxToPdf($filePath, $outputPath)) {
+            return null;
+        }
+
+        Log::info('DOCX converted to layout-preserving PDF through CloudConvert.', [
+            'file' => basename($filePath),
+            'output_bytes' => filesize($outputPath) ?: 0,
+        ]);
+
+        return $outputPath;
     }
 
     private function convertDocxWithWordHighlights(string $filePath, string $cacheDir, array $highlights): ?string
